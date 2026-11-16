@@ -1,0 +1,25 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.7 }
+      - name: Fetch NudeNet 320n model from the pip package
+        run: |
+          pip download nudenet==3.4.2 --no-deps -d /tmp/nn
+          mkdir -p app/src/main/assets
+          unzip -j /tmp/nn/*.whl "nudenet/320n.onnx" -d app/src/main/assets
+          ls -l app/src/main/assets
+      - run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screen-censor-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
