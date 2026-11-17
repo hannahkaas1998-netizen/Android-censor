@@ -77,7 +77,7 @@ class MainActivity : Activity() {
         })
 
         val recheckLabel = label("")
-        fun setRecheckText(sec: Int) { recheckLabel.text = "Re-check what's underneath every $sec s (lower = safer, more flicker)" }
+        fun setRecheckText(sec: Int) { recheckLabel.text = "Fallback mode only: re-check every $sec s" }
         setRecheckText(p.getInt("recheck", 2))
         root.addView(recheckLabel)
         root.addView(SeekBar(this).apply {
@@ -105,6 +105,13 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
+    override fun onResume() {
+        super.onResume()
+        val mode = p.getString("mode", null)
+        if (mode != null && status.text.toString().startsWith("Running"))
+            status.text = "Running ($mode)"
+    }
+
     private fun start() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -114,6 +121,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
         ) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1)
+        p.edit().remove("mode").apply()
         val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(mgr.createScreenCaptureIntent(), 100)
@@ -126,7 +134,7 @@ class MainActivity : Activity() {
             startForegroundService(
                 Intent(this, CensorService::class.java).putExtra("code", res).putExtra("data", data)
             )
-            status.text = "Running. Open any app; change options here anytime."
+            status.text = "Running. Come back here later to see which mode it ended up in."
         } else if (req == 100) status.text = "Screen capture was not allowed"
     }
 }
