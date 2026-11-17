@@ -30,8 +30,11 @@ class CensorService : Service() {
     @Volatile private var alive = false
     private var worker: Thread? = null
 
-    // While something is covered, the overlay hides briefly this often to re-check what's underneath.
-    private val recheckMs = 1200L
+    private class Built(val items: List<OverlayView.Item>, val rects: List<RectF>)
+
+    private val NUDE_F = setOf(2, 3, 4, 6)   // buttocks, breast, female genitalia, anus (exposed)
+    private val BUTT = setOf(2, 17)          // buttocks exposed + clothed
+    private val MALE = setOf(14)             // male genitalia exposed
 
     override fun onBind(i: Intent?): IBinder? = null
 
@@ -105,35 +108,75 @@ class CensorService : Service() {
 
     private fun loop(sw: Int, sh: Int, cw: Int, ch: Int) {
         val det = Detector(this)
-        val prefs = getSharedPreferences("cfg", MODE_PRIVATE)
+        val p = getSharedPreferences("cfg", MODE_PRIVATE)
         val ov = overlay ?: return
         var covered = false
+        var misses = 0
         var lastCheck = 0L
+        var seed = 0
+        var rects: List<RectF> = emptyList()
+
         while (alive) {
-            val now = System.currentTimeMillis()
-            if (covered && now - lastCheck < recheckMs) { Thread.sleep(50); continue }
-            if (covered) {
+            try {
+                val want = wanted(p)
+                val sens = p.getFloat("sens", 0.35f)
+
+                if (!covered) {
+                    val bmp = grab(cw, ch)
+                    if (bmp == null) { Thread.sleep(60); continue }
+                    val dets = det.detect(bmp, sens).filter { it.label in want }
+                    if (dets.isEmpty()) { Thread.sleep(30); continue }
+                    seed++
+                    val b = build(dets, bmp, p, sw, sh, seed)
+                    rects = b.rects
+                    ov.items = b.items
+                    ov.show = true
+                    ov.postInvalidate()
+                    covered = true
+                    misses = 0
+                    lastCheck = System.currentTimeMillis()
+                    continue
+                }
+
+                // Something is covered. Keep watching the frame (cover included) for new
+                // detections outside the covered areas, and do a timed re-check of what's underneath.
+                val interval = p.getInt("recheck", 2) * 1000L
+                var recheck = System.currentTimeMillis() - lastCheck >= interval
+                if (!recheck) {
+                    val bmp = grab(cw, ch)
+                    if (bmp == null) { Thread.sleep(60); continue }
+                    val dets = det.detect(bmp, sens).filter { it.label in want }
+                    val outside = dets.any { d -> rects.none { it.contains(d.box.centerX(), d.box.centerY()) } }
+                    if (outside) recheck = true else { Thread.sleep(30); continue }
+                }
+
+                // Re-check: hide the cover just long enough to capture one clean frame, re-show it
+                // immediately, and only then run the (slow) detection.
+                reader?.acquireLatestImage()?.close()
                 ov.show = false; ov.postInvalidate()
-                Thread.sleep(180)
+                Thread.sleep(70)
+                val clean = grab(cw, ch)
+                ov.show = true; ov.postInvalidate()
+                lastCheck = System.currentTimeMillis()
+                if (clean == null) continue
+                val dets = det.detect(clean, sens * 0.8f).filter { it.label in want }
+                if (dets.isEmpty()) {
+                    misses++
+                    if (misses >= 2) {        // must be clear twice in a row before uncovering
+                        covered = false
+                        ov.items = emptyList()
+                        ov.postInvalidate()
+                    }
+                } else {
+                    misses = 0
+                    val b = build(dets, clean, p, sw, sh, seed)
+                    rects = b.rects
+                    ov.items = b.items
+                    ov.postInvalidate()
+                }
+            } catch (e: Exception) {
+                try { Thread.sleep(200) } catch (_: Exception) {}
             }
-            val bmp = grab(cw, ch)
-            if (bmp == null) {
-                if (covered) { ov.show = true; ov.postInvalidate(); lastCheck = System.currentTimeMillis() }
-                Thread.sleep(50); continue
-            }
-            val want = wanted(prefs)
-            val dets = det.detect(bmp, prefs.getFloat("sens", 0.35f)).filter { it.label in want }
-            lastCheck = System.currentTimeMillis()
-            if (dets.isEmpty()) {
-                covered = false
-                ov.items = emptyList()
-            } else {
-                covered = true
-                ov.items = build(dets, bmp, prefs, sw, sh)
-            }
-            ov.show = true
-            ov.postInvalidate()
-            Thread.sleep(40)
         }
     }
 
@@ -153,9 +196,11 @@ class CensorService : Service() {
 
     private fun wanted(p: SharedPreferences): Set<Int> {
         val s = HashSet<Int>()
-        if (p.getBoolean("nudity", true)) s.addAll(Detector.NUDE)
+        if (p.getBoolean("nudity", true)) s.addAll(NUDE_F)
+        if (p.getBoolean("male", true)) s.addAll(MALE)
+        if (p.getBoolean("butt", true)) s.addAll(BUTT)
         if (p.getBoolean("cleavage", true)) s.addAll(Detector.CLEAVAGE)
-        if (p.getBoolean("face", false)) s.addAll(Detector.FACE)
+        if (p.getBoolean("face", false) || p.getBoolean("eyes", false)) s.addAll(Detector.FACE)
         if (p.getBoolean("feet", false)) s.addAll(Detector.FEET)
         return s
     }
@@ -169,38 +214,53 @@ class CensorService : Service() {
         )
     }
 
-    private fun build(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences, sw: Int, sh: Int): List<OverlayView.Item> {
+    private fun build(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences, sw: Int, sh: Int, seed: Int): Built {
         val sx = sw.toFloat() / bmp.width
         val sy = sh.toFloat() / bmp.height
         val style = p.getString("style", "mosaic")
+        val faceOn = p.getBoolean("face", false)
+        val eyesOn = p.getBoolean("eyes", false)
+        val words = (p.getString("words", "LOSER, PIG, GOONER") ?: "")
+            .split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
+        val useLabels = p.getBoolean("labels", true) && words.isNotEmpty()
+
+        // Eyes only: narrow a face box down to the eye band
+        val base = d.map { det ->
+            val b = det.box
+            if (det.label in Detector.FACE && eyesOn && !faceOn)
+                RectF(b.left, b.top + b.height() * 0.2f, b.right, b.top + b.height() * 0.55f)
+            else RectF(b)
+        }
         val rects: List<RectF> = when (p.getString("cover", "parts")) {
             "screen" -> listOf(RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat()))
             "group" -> {
-                val u = RectF(d[0].box)
-                d.forEach { u.union(it.box) }
+                val u = RectF(base[0])
+                base.forEach { u.union(it) }
                 listOf(pad(u, 0.35f, bmp))
             }
-            else -> d.map { pad(it.box, 0.2f, bmp) }
+            else -> base.map { pad(it, 0.2f, bmp) }
         }
-        return rects.map { r ->
+        val items = rects.mapIndexed { i, r ->
             val x = r.left.toInt().coerceIn(0, bmp.width - 1)
             val y = r.top.toInt().coerceIn(0, bmp.height - 1)
             val w = r.width().toInt().coerceIn(1, bmp.width - x)
             val h = r.height().toInt().coerceIn(1, bmp.height - y)
             val dest = RectF(x * sx, y * sy, (x + w) * sx, (y + h) * sy)
+            val label = if (useLabels && dest.width() > 140f) words[(seed + i) % words.size] else null
             when (style) {
-                "solid" -> OverlayView.Item(dest, null, false)
+                "solid" -> OverlayView.Item(dest, null, false, label)
                 "blur" -> {
                     val c = Bitmap.createBitmap(bmp, x, y, w, h)
-                    OverlayView.Item(dest, Bitmap.createScaledBitmap(c, maxOf(1, w / 14), maxOf(1, h / 14), true), true)
+                    OverlayView.Item(dest, Bitmap.createScaledBitmap(c, maxOf(1, w / 14), maxOf(1, h / 14), true), true, label)
                 }
                 else -> {
                     val c = Bitmap.createBitmap(bmp, x, y, w, h)
                     val blk = maxOf(6, minOf(w, h) / 8)
-                    OverlayView.Item(dest, Bitmap.createScaledBitmap(c, maxOf(1, w / blk), maxOf(1, h / blk), true), false)
+                    OverlayView.Item(dest, Bitmap.createScaledBitmap(c, maxOf(1, w / blk), maxOf(1, h / blk), true), false, label)
                 }
             }
         }
+        return Built(items, rects)
     }
 
     override fun onDestroy() {
