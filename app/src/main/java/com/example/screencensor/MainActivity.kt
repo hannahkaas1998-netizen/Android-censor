@@ -76,16 +76,17 @@ class MainActivity : Activity() {
             })
         })
 
-        val recheckLabel = label("")
-        fun setRecheckText(sec: Int) { recheckLabel.text = "Fallback mode only: re-check every $sec s" }
-        setRecheckText(p.getInt("recheck", 2))
-        root.addView(recheckLabel)
+        val holdLabel = label("")
+        fun setHoldText(v: Float) { holdLabel.text = "Keep the cover this long after it stops seeing anything: ${"%.1f".format(v)} s" }
+        setHoldText(p.getFloat("hold", 1.2f))
+        root.addView(holdLabel)
         root.addView(SeekBar(this).apply {
-            max = 5
-            progress = p.getInt("recheck", 2) - 1
+            max = 25
+            progress = ((p.getFloat("hold", 1.2f) - 0.5f) * 10).toInt().coerceIn(0, 25)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
-                    p.edit().putInt("recheck", v + 1).apply(); setRecheckText(v + 1)
+                    val h = 0.5f + v / 10f
+                    p.edit().putFloat("hold", h).apply(); setHoldText(h)
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
@@ -134,7 +135,7 @@ class MainActivity : Activity() {
             startForegroundService(
                 Intent(this, CensorService::class.java).putExtra("code", res).putExtra("data", data)
             )
-            status.text = "Running. Come back here later to see which mode it ended up in."
+            status.text = "Running. The notification shows which mode it is in."
         } else if (req == 100) status.text = "Screen capture was not allowed"
     }
 }
