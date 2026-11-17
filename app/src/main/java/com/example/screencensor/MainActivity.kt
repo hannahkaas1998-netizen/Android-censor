@@ -76,23 +76,6 @@ class MainActivity : Activity() {
             })
         })
 
-        val holdLabel = label("")
-        fun setHoldText(v: Float) { holdLabel.text = "Keep the cover this long after it stops seeing anything: ${"%.1f".format(v)} s" }
-        setHoldText(p.getFloat("hold", 1.2f))
-        root.addView(holdLabel)
-        root.addView(SeekBar(this).apply {
-            max = 25
-            progress = ((p.getFloat("hold", 1.2f) - 0.5f) * 10).toInt().coerceIn(0, 25)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
-                    val h = 0.5f + v / 10f
-                    p.edit().putFloat("hold", h).apply(); setHoldText(h)
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        })
-
         root.addView(Button(this).apply { text = "Start"; setOnClickListener { start() } })
         root.addView(Button(this).apply {
             text = "Stop"
@@ -106,13 +89,6 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    override fun onResume() {
-        super.onResume()
-        val mode = p.getString("mode", null)
-        if (mode != null && status.text.toString().startsWith("Running"))
-            status.text = "Running ($mode)"
-    }
-
     private fun start() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -122,7 +98,6 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
         ) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1)
-        p.edit().remove("mode").apply()
         val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(mgr.createScreenCaptureIntent(), 100)
@@ -135,7 +110,7 @@ class MainActivity : Activity() {
             startForegroundService(
                 Intent(this, CensorService::class.java).putExtra("code", res).putExtra("data", data)
             )
-            status.text = "Running. The notification shows which mode it is in."
+            status.text = "Running. Open any app; options apply live."
         } else if (req == 100) status.text = "Screen capture was not allowed"
     }
 }
