@@ -403,7 +403,7 @@ class CensorService : Service() {
             if (best == null) {
                 trackSeq++
                 val word = if (useLabels) words[(trackSeq % words.size).toInt()] else null
-                tracks.add(Track(cur, word, makeBase(f, toRect(tf, f), style)))
+                tracks.add(Track(cur, word, makeBase(f, toRect(tf, f), style, p)))
                 changed = true
             } else {
                 val u = RectF(best.box)
@@ -474,12 +474,13 @@ class CensorService : Service() {
     // ------------------------------------------------------------------------------------
 
     /** Chunky mosaic (about 5 blocks across the short side), or a blur source. Made once per cover. */
-    private fun makeBase(frame: Bitmap, r: Rect, style: String): Bitmap? {
+    private fun makeBase(frame: Bitmap, r: Rect, style: String, p: SharedPreferences): Bitmap? {
         if (style == "solid") return null
         val w = r.width()
         val h = r.height()
         val crop = Bitmap.createBitmap(frame, r.left, r.top, w, h)
-        val blk = if (style == "blur") 14 else maxOf(10, minOf(w, h) / 5)
+        val cells = (12 - p.getInt("pixel", 6)).coerceAtLeast(2)       // fewer cells = chunkier
+        val blk = if (style == "blur") 6 + 2 * p.getInt("blurs", 5) else maxOf(8, minOf(w, h) / cells)
         return Bitmap.createScaledBitmap(crop, maxOf(2, w / blk), maxOf(2, h / blk), true)
     }
 

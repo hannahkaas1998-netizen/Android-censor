@@ -35,8 +35,42 @@ class MainActivity : Activity() {
             }
             setOnCheckedChangeListener { g, id -> p.edit().putString(key, g.findViewById<RadioButton>(id).tag as String).apply() }
         }
+        fun strength(title: String, key: String, def: Int) {
+            val lab = label("")
+            fun set(v: Int) { lab.text = "$title: $v / 10" }
+            set(p.getInt(key, def))
+            root.addView(lab)
+            root.addView(SeekBar(this).apply {
+                max = 9
+                progress = p.getInt(key, def) - 1
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
+                        p.edit().putInt(key, v + 1).apply(); set(v + 1)
+                    }
+                    override fun onStartTrackingTouch(s: SeekBar?) {}
+                    override fun onStopTrackingTouch(s: SeekBar?) {}
+                })
+            })
+        }
 
         root.addView(TextView(this).apply { text = "Screen Censor"; textSize = 26f })
+
+        root.addView(label("Safe browser (edits the images themselves: no flicker, nothing moves)"))
+        root.addView(Button(this).apply {
+            text = "Open safe browser"
+            setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java)) }
+        })
+        root.addView(check("Block videos (they can't be censored)", "blockvideo", true))
+        root.addView(EditText(this).apply {
+            hint = "Start page"
+            setText(p.getString("home", "https://old.reddit.com"))
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) { p.edit().putString("home", s.toString()).apply() }
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        })
+
         root.addView(label("Censor"))
         root.addView(check("Nudity (breasts, genitals, anus)", "nudity", true))
         root.addView(check("Male genitals (untick to leave them uncovered)", "male", true))
@@ -47,9 +81,11 @@ class MainActivity : Activity() {
         root.addView(check("Feet", "feet", false))
 
         root.addView(label("Cover"))
-        root.addView(radios("cover", "parts", listOf("parts" to "Detected areas only", "group" to "Whole body area", "screen" to "Entire screen")))
+        root.addView(radios("cover", "parts", listOf("parts" to "Detected areas only", "group" to "Whole body area", "screen" to "Entire picture")))
         root.addView(label("Style"))
         root.addView(radios("style", "mosaic", listOf("mosaic" to "Mosaic", "blur" to "Blur", "solid" to "Solid box")))
+        strength("Pixelation strength (higher = chunkier)", "pixel", 6)
+        strength("Blur strength (higher = blurrier)", "blurs", 5)
 
         root.addView(label("Text on the cover"))
         root.addView(check("Show text labels", "labels", true))
@@ -76,15 +112,26 @@ class MainActivity : Activity() {
             })
         })
 
-        root.addView(Button(this).apply { text = "Start"; setOnClickListener { start() } })
+        root.addView(label("High heels focus (safe browser only)"))
+        root.addView(radios("heelmode", "off", listOf(
+            "off" to "Off",
+            "zoom" to "Zoom in on the heels",
+            "isolate_blur" to "Blur everything except the heels",
+            "isolate_black" to "Black out everything except the heels"
+        )))
+        root.addView(label("If a picture has no heels in it"))
+        root.addView(radios("heelnone", "hide", listOf("hide" to "Hide the picture", "show" to "Show it normally")))
+
+        root.addView(label("Other apps (screen overlay)"))
+        root.addView(Button(this).apply { text = "Start overlay"; setOnClickListener { start() } })
         root.addView(Button(this).apply {
-            text = "Stop"
+            text = "Stop overlay"
             setOnClickListener {
                 stopService(Intent(this@MainActivity, CensorService::class.java))
                 status.text = "Stopped"
             }
         })
-        status = TextView(this).apply { text = "Stopped"; setPadding(0, 24, 0, 0) }
+        status = TextView(this).apply { text = "Overlay stopped"; setPadding(0, 24, 0, 0) }
         root.addView(status)
         setContentView(ScrollView(this).apply { addView(root) })
     }
@@ -92,7 +139,7 @@ class MainActivity : Activity() {
     private fun start() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-            status.text = "Allow \"Display over other apps\", come back and tap Start again"
+            status.text = "Allow \"Display over other apps\", come back and tap Start overlay again"
             return
         }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -110,7 +157,7 @@ class MainActivity : Activity() {
             startForegroundService(
                 Intent(this, CensorService::class.java).putExtra("code", res).putExtra("data", data)
             )
-            status.text = "Running. Open any app; options apply live."
+            status.text = "Overlay running. Open any app."
         } else if (req == 100) status.text = "Screen capture was not allowed"
     }
 }
