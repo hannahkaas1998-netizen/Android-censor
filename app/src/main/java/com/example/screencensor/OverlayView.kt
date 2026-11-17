@@ -5,7 +5,10 @@ import android.graphics.*
 import android.view.View
 
 class OverlayView(c: Context) : View(c) {
-    data class Item(val dest: RectF, val bmp: Bitmap?, val smooth: Boolean, val label: String? = null)
+    data class Item(
+        val dest: RectF, val bmp: Bitmap?, val smooth: Boolean,
+        val label: String? = null, val alpha: Int = 255
+    )
 
     @Volatile var items: List<Item> = emptyList()
     @Volatile var show = true
@@ -23,8 +26,14 @@ class OverlayView(c: Context) : View(c) {
     override fun onDraw(cv: Canvas) {
         if (!show) return
         for (item in items) {
-            if (item.bmp == null) cv.drawRect(item.dest, black)
-            else cv.drawBitmap(item.bmp, null, item.dest, if (item.smooth) paintSmooth else paintSharp)
+            if (item.bmp == null) {
+                cv.drawRect(item.dest, black)
+            } else {
+                val pt = if (item.smooth) paintSmooth else paintSharp
+                pt.alpha = item.alpha
+                cv.drawBitmap(item.bmp, null, item.dest, pt)
+                pt.alpha = 255
+            }
             item.label?.let { drawLabel(cv, item.dest, it) }
         }
     }
