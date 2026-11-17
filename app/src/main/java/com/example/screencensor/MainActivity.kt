@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.widget.*
 
@@ -36,14 +38,31 @@ class MainActivity : Activity() {
 
         root.addView(TextView(this).apply { text = "Screen Censor"; textSize = 26f })
         root.addView(label("Censor"))
-        root.addView(check("Nudity", "nudity", true))
+        root.addView(check("Nudity (breasts, genitals, anus)", "nudity", true))
+        root.addView(check("Male genitals (untick to leave them uncovered)", "male", true))
+        root.addView(check("Buttocks (also when clothed)", "butt", true))
         root.addView(check("Cleavage / covered chest", "cleavage", true))
         root.addView(check("Faces", "face", false))
+        root.addView(check("Eyes only", "eyes", false))
         root.addView(check("Feet", "feet", false))
+
         root.addView(label("Cover"))
         root.addView(radios("cover", "parts", listOf("parts" to "Detected areas only", "group" to "Whole body area", "screen" to "Entire screen")))
         root.addView(label("Style"))
         root.addView(radios("style", "mosaic", listOf("mosaic" to "Mosaic", "blur" to "Blur", "solid" to "Solid box")))
+
+        root.addView(label("Text on the cover"))
+        root.addView(check("Show text labels", "labels", true))
+        root.addView(EditText(this).apply {
+            hint = "Words, separated by commas"
+            setText(p.getString("words", "LOSER, PIG, GOONER"))
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) { p.edit().putString("words", s.toString()).apply() }
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        })
+
         root.addView(label("Sensitivity (right = catches more)"))
         root.addView(SeekBar(this).apply {
             max = 70
@@ -56,6 +75,23 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
         })
+
+        val recheckLabel = label("")
+        fun setRecheckText(sec: Int) { recheckLabel.text = "Re-check what's underneath every $sec s (lower = safer, more flicker)" }
+        setRecheckText(p.getInt("recheck", 2))
+        root.addView(recheckLabel)
+        root.addView(SeekBar(this).apply {
+            max = 5
+            progress = p.getInt("recheck", 2) - 1
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
+                    p.edit().putInt("recheck", v + 1).apply(); setRecheckText(v + 1)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        })
+
         root.addView(Button(this).apply { text = "Start"; setOnClickListener { start() } })
         root.addView(Button(this).apply {
             text = "Stop"
