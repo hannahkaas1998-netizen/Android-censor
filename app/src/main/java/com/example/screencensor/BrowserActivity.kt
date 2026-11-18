@@ -34,9 +34,11 @@ class BrowserActivity : Activity() {
             setOnEditorActionListener { _, _, _ -> load(text.toString()); true }
         }
         val go = Button(this).apply { text = "Go"; setOnClickListener { load(urlBox.text.toString()) } }
+        val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
         bar.addView(back)
         bar.addView(urlBox)
         bar.addView(go)
+        bar.addView(feedBtn)
 
         web = WebView(this)
         web.settings.javaScriptEnabled = true
@@ -44,8 +46,16 @@ class BrowserActivity : Activity() {
         web.settings.mediaPlaybackRequiresUserGesture = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? =
-                ImageProxy.handle(this@BrowserActivity, r, p)
+            override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
+                // our own phone-friendly feed page, served from inside the app
+                if (r.isForMainFrame && r.url.host == "old.reddit.com" && r.url.path == "/__feed") {
+                    return WebResourceResponse(
+                        "text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"),
+                        this@BrowserActivity.assets.open("feed.html")
+                    )
+                }
+                return ImageProxy.handle(this@BrowserActivity, r, p)
+            }
 
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
                 val s = r?.url?.scheme
@@ -66,7 +76,12 @@ class BrowserActivity : Activity() {
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+        if (p.getBoolean("feedmode", true)) web.loadUrl(FEED)
+        else load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+    }
+
+    companion object {
+        const val FEED = "https://old.reddit.com/__feed"
     }
 
     private fun load(input: String) {

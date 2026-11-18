@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Feed</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#0e0e10;color:#f2f2f2;font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;display:flex;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;background:#16161a;border-bottom:1px solid #26262c}
+input,select{font:inherit;color:#f2f2f2;background:#232329;border:1px solid #33333b;border-radius:10px;padding:10px 12px;outline:none}
+input{flex:1;min-width:0}
+select{flex:0 0 auto;max-width:42%}
+.card{margin:16px 0 26px}
+.title{display:block;padding:0 14px 9px;font-weight:650;font-size:17px;line-height:1.3;color:#fff;text-decoration:none;overflow-wrap:anywhere}
+.ph{position:relative;margin:0 8px 8px;border-radius:12px;overflow:hidden;background:#1b1b20;max-height:82vh}
+.ph:not(.done){background:linear-gradient(110deg,#1b1b20 30%,#25252c 50%,#1b1b20 70%);background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.ph img{display:block;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .25s}
+.ph img.ok{opacity:1}
+.ph.err{min-height:90px}
+.tag{position:absolute;right:8px;bottom:8px;padding:3px 9px;border-radius:8px;background:rgba(0,0,0,.65);font-size:12px;letter-spacing:.3px}
+#msg{padding:18px 16px;color:#9a9aa5;text-align:center}
+#more{height:1px}
+</style>
+</head>
+<body>
+<header>
+  <input id="q" type="search" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="go" placeholder="r/pics, u/name, or blank for front page">
+  <select id="s">
+    <option value="hot">Hot</option>
+    <option value="new">New</option>
+    <option value="top:day">Top today</option>
+    <option value="top:week">Top week</option>
+    <option value="top:month">Top month</option>
+    <option value="top:all">Top all time</option>
+  </select>
+</header>
+<main id="feed"></main>
+<div id="msg"></div>
+<div id="more"></div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var feed = $('feed'), msg = $('msg'), more = $('more'), q = $('q'), sel = $('s');
+  var state = { src: '', sort: 'hot' };
+  var after = null, loading = false, done = false, gen = 0;
+
+  function normSrc(v) {
+    v = (v || '').trim().replace(/^https?:\/\/(old\.|www\.)?reddit\.com/i, '').replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!v || /^(front|home)$/i.test(v)) return '';
+    if (/^(r|u|user)\//i.test(v)) {
+      var parts = v.split('/').slice(0, 2);
+      if (/^u$/i.test(parts[0])) parts[0] = 'user';
+      return parts.join('/');
+    }
+    if (/^[\w+]+$/.test(v)) return 'r/' + v;
+    return '';
+  }
+
+  function readHash() {
+    var raw = location.hash.slice(1);
+    if (raw) {
+      var i = raw.lastIndexOf('|');
+      try {
+        state.src = decodeURIComponent(i < 0 ? raw : raw.slice(0, i));
+        state.sort = (i < 0 ? '' : raw.slice(i + 1)) || 'hot';
+      } catch (e) {}
+    } else {
+      try {
+        var l = JSON.parse(localStorage.getItem('feed_last') || 'null');
+        if (l) { state.src = l.src || ''; state.sort = l.sort || 'hot'; }
+      } catch (e) {}
+    }
+    q.value = state.src;
+    sel.value = state.sort;
+    if (sel.value !== state.sort) { state.sort = 'hot'; sel.value = 'hot'; }
+  }
+
+  function go() {
+    state.src = normSrc(q.value);
+    state.sort = sel.value;
+    var target = '#' + encodeURIComponent(state.src) + '|' + state.sort;
+    var same = location.hash === target;
+    location.hash = target;
+    if (same) render();
+  }
+
+  function listURL() {
+    var p = state.sort.split(':'), s = p[0], t = p[1];
+    var isUser = /^user\//i.test(state.src);
+    var base;
+    if (!state.src) base = '/' + s + '.json';
+    else if (isUser) base = '/' + state.src + '/submitted.json';
+    else base = '/' + state.src + '/' + s + '.json';
+    var params = ['raw_json=1', 'limit=25'];
+    if (isUser) params.push('sort=' + s);
+    if (t) params.push('t=' + t);
+    if (after) params.push('after=' + encodeURIComponent(after));
+    return base + '?' + params.join('&');
+  }
+
+  function best(arr, src) {
+    var pick = null;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].u && arr[i].w <= 1080 && (!pick || arr[i].w > pick.w)) pick = arr[i];
+    }
+    return pick || src;
+  }
+
+  function pics(d) {
+    var out = [], total = 0;
+    var video = !!d.is_video || /video/.test(d.post_hint || '');
+    try {
+      if (d.is_gallery && d.media_metadata) {
+        var items = (d.gallery_data && d.gallery_data.items) || [];
+        total = items.length;
+        items.slice(0, 6).forEach(function (it) {
+          var m = d.media_metadata[it.media_id];
+          if (!m || m.status !== 'valid' || !m.s) return;
+          var arr = (m.p || []).map(function (x) { return { u: x.u, w: x.x, h: x.y }; });
+          var src = { u: m.s.u || m.s.gif, w: m.s.x, h: m.s.y };
+          var b = best(arr, src);
+          if (b && b.u) out.push(b);
+        });
+      } else if (d.preview && d.preview.images && d.preview.images[0]) {
+        var im = d.preview.images[0];
+        var arr2 = (im.resolutions || []).map(function (x) { return { u: x.url, w: x.width, h: x.height }; });
+        var b2 = best(arr2, { u: im.source.url, w: im.source.width, h: im.source.height });
+        if (b2 && b2.u) out.push(b2);
+      } else if (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(d.url || '')) {
+        out.push({ u: d.url, w: 0, h: 0 });
+      }
+    } catch (e) {}
+    return { list: out, total: total, video: video };
+  }
+
+  function tag(box, text) {
+    var t = document.createElement('span');
+    t.className = 'tag';
+    t.textContent = text;
+    box.appendChild(t);
+  }
+
+  function ph(p, info, i) {
+    var box = document.createElement('div');
+    box.className = 'ph';
+    if (p.w && p.h) box.style.aspectRatio = p.w + ' / ' + p.h; else box.style.minHeight = '220px';
+    var im = document.createElement('img');
+    im.alt = '';
+    im.decoding = 'async';
+    im.loading = 'lazy';
+    im.dataset.src = p.u;
+    im.onload = function () {
+      im.className = 'ok';
+      box.classList.add('done');
+      if (!(p.w && p.h)) {
+        box.style.aspectRatio = im.naturalWidth + ' / ' + im.naturalHeight;
+        box.style.minHeight = '0';
+      }
+    };
+    im.onerror = function () { box.classList.add('err'); };
+    box.appendChild(im);
+    if (info.video && i === 0) tag(box, 'VIDEO');
+    else if (info.total > 1) tag(box, (i + 1) + '/' + info.total);
+    return box;
+  }
+
+  function card(d) {
+    var c = document.createElement('article');
+    c.className = 'card';
+    var a = document.createElement('a');
+    a.className = 'title';
+    a.textContent = d.title || '';
+    a.href = 'https://old.reddit.com' + (d.permalink || '');
+    c.appendChild(a);
+    var info = pics(d);
+    info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i)); });
+    return c;
+  }
+
+  function activate(c) {
+    var imgs = c.querySelectorAll('img[data-src]');
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].src = imgs[i].dataset.src;      // set after the card is in the page so lazy loading applies
+      imgs[i].removeAttribute('data-src');
+    }
+  }
+
+  function load() {
+    if (loading || done) return;
+    loading = true;
+    var my = gen;
+    msg.textContent = 'Loading...';
+    fetch(listURL(), { credentials: 'include', headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        if (my !== gen) return;
+        var items = (j && j.data && j.data.children) || [];
+        items.forEach(function (c) {
+          if (c.kind === 't3' && c.data && !c.data.stickied) {
+            var el = card(c.data);
+            feed.appendChild(el);
+            activate(el);
+          }
+        });
+        after = j.data ? j.data.after : null;
+        if (!after) done = true;
+        msg.textContent = (done && !feed.children.length) ? 'Nothing here.' : '';
+        loading = false;
+        check();
+      })
+      .catch(function (e) {
+        if (my !== gen) return;
+        loading = false;
+        msg.textContent = "Couldn't load (" + e.message + "). For 18+ communities, log in or confirm your age in Site view first.";
+      });
+  }
+
+  function check() {
+    var r = more.getBoundingClientRect();
+    if (!loading && !done && r.top < window.innerHeight * 2) load();
+  }
+
+  function render() {
+    gen++;
+    after = null; done = false; loading = false;
+    feed.innerHTML = '';
+    msg.textContent = '';
+    window.scrollTo(0, 0);
+    try { localStorage.setItem('feed_last', JSON.stringify(state)); } catch (e) {}
+    document.title = state.src || 'front page';
+    load();
+  }
+
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); q.blur(); go(); }
+  });
+  sel.addEventListener('change', go);
+  window.addEventListener('scroll', check, { passive: true });
+  window.addEventListener('resize', check);
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>
