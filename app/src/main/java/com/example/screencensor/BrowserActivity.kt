@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 class BrowserActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var urlBox: EditText
+    private lateinit var bridge: FeedBridge
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(b: Bundle?) {
@@ -45,6 +46,11 @@ class BrowserActivity : Activity() {
         web.settings.domStorageEnabled = true
         web.settings.mediaPlaybackRequiresUserGesture = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
+        // look like a normal Chrome browser instead of an embedded WebView
+        val ua = web.settings.userAgentString.replace("; wv", "").replace(" Version/4.0", "")
+        web.settings.userAgentString = ua
+        bridge = FeedBridge(web, ua)
+        web.addJavascriptInterface(bridge, "Android")
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
                 // our own phone-friendly feed page, served from inside the app
@@ -63,7 +69,10 @@ class BrowserActivity : Activity() {
             }
 
             override fun onPageStarted(v: WebView?, url: String?, f: Bitmap?) {
-                if (url != null) urlBox.setText(url)
+                if (url != null) {
+                    urlBox.setText(url)
+                    bridge.page = url
+                }
             }
         }
         if (Build.VERSION.SDK_INT >= 24) {

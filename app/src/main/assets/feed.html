@@ -21,7 +21,8 @@ select{flex:0 0 auto;max-width:42%}
 .ph img.ok{opacity:1}
 .ph.err{min-height:90px}
 .tag{position:absolute;right:8px;bottom:8px;padding:3px 9px;border-radius:8px;background:rgba(0,0,0,.65);font-size:12px;letter-spacing:.3px}
-#msg{padding:18px 16px;color:#9a9aa5;text-align:center}
+#msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
+#msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
 #more{height:1px}
 </style>
 </head>
@@ -45,7 +46,54 @@ select{flex:0 0 auto;max-width:42%}
   var $ = function (id) { return document.getElementById(id); };
   var feed = $('feed'), msg = $('msg'), more = $('more'), q = $('q'), sel = $('s');
   var state = { src: '', sort: 'hot' };
-  var after = null, loading = false, done = false, gen = 0;
+  var after = null, loading = false, done = false, gen = 0, mode = null;
+
+  // ---------- talking to Reddit ----------
+  // The app can download pages for us with the browser's login cookies (window.Android);
+  // if that isn't there we fall back to the page's own fetch().
+  var nativeCbs = {}, nid = 0;
+  window.__nativeCb = function (id, status, body) {
+    var cb = nativeCbs[id];
+    if (cb) { delete nativeCbs[id]; cb(status, body); }
+  };
+  function nativeGet(path) {
+    return new Promise(function (res, rej) {
+      if (!window.Android || !window.Android.fetch) return rej(new Error('no bridge'));
+      var id = ++nid;
+      nativeCbs[id] = function (status, body) {
+        if (status === -1) rej(new Error(body || 'network error')); else res({ status: status, body: body });
+      };
+      try { window.Android.fetch(id, path); } catch (e) { delete nativeCbs[id]; rej(e); return; }
+      setTimeout(function () {
+        if (nativeCbs[id]) { delete nativeCbs[id]; rej(new Error('timed out')); }
+      }, 25000);
+    });
+  }
+  function pageGet(path) {
+    return fetch(path, { credentials: 'include' }).then(function (r) {
+      return r.text().then(function (t) { return { status: r.status, body: t }; });
+    });
+  }
+  function getText(path) {
+    return nativeGet(path).catch(function () { return pageGet(path); });
+  }
+
+  function HttpErr(status, body) {
+    var e = new Error('HTTP ' + status);
+    e.status = status;
+    e.body = body || '';
+    return e;
+  }
+  function friendly(e) {
+    var s = e.status, reason = '';
+    try { reason = (JSON.parse(e.body) || {}).reason || ''; } catch (x) {}
+    if (s === 403 && reason === 'gated')
+      return "This community is 18+ and your account isn't set to show adult content. On old.reddit.com open Preferences and tick \u201cI am over eighteen and willing to view adult content\u201d, then retry.";
+    if (s === 401 || s === 403) return 'Reddit refused the request (HTTP ' + s + '). Check that you are logged in.';
+    if (s === 429) return 'Reddit says slow down (HTTP 429). Wait a minute, then retry.';
+    if (s === 404) return "That community or user wasn't found.";
+    return e.message || 'Unknown error';
+  }
 
   function normSrc(v) {
     v = (v || '').trim().replace(/^https?:\/\/(old\.|www\.)?reddit\.com/i, '').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -101,6 +149,81 @@ select{flex:0 0 auto;max-width:42%}
     return base + '?' + params.join('&');
   }
 
+  function htmlURL() {
+    var p = state.sort.split(':'), s = p[0], t = p[1];
+    var isUser = /^user\//i.test(state.src);
+    var base;
+    if (!state.src) base = (s === 'hot') ? '/' : '/' + s + '/';
+    else if (isUser) base = '/' + state.src + '/submitted/';
+    else base = '/' + state.src + '/' + (s === 'hot' ? '' : s + '/');
+    var params = [];
+    if (isUser) params.push('sort=' + s);
+    if (t) params.push('t=' + t);
+    if (after) { params.push('count=' + feed.children.length); params.push('after=' + encodeURIComponent(after)); }
+    return base + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function getJson() {
+    return getText(listURL()).then(function (r) {
+      if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
+      var j;
+      try { j = JSON.parse(r.body); } catch (x) { throw new Error('Reddit sent a web page instead of data'); }
+      var ch = (j && j.data && j.data.children) || [];
+      return {
+        items: ch.filter(function (c) { return c.kind === 't3' && c.data && !c.data.stickied; })
+                 .map(function (c) { return c.data; }),
+        after: j.data ? j.data.after : null
+      };
+    });
+  }
+
+  // Backup route: read the normal old.reddit page (the one you can see when browsing the site)
+  function parseHtml(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var items = [];
+    var things = doc.querySelectorAll('#siteTable .thing.link');
+    for (var i = 0; i < things.length; i++) {
+      var el = things[i];
+      if (el.classList.contains('promoted') || el.classList.contains('stickied') ||
+          el.getAttribute('data-promoted') === 'true') continue;
+      var a = el.querySelector('a.title');
+      if (!a) continue;
+      items.push({
+        title: a.textContent,
+        permalink: el.getAttribute('data-permalink') || '',
+        url: el.getAttribute('data-url') || '',
+        is_video: /v\.redd\.it/.test(el.getAttribute('data-domain') || '')
+      });
+    }
+    var next = doc.querySelector('.next-button a');
+    var nextAfter = null;
+    if (next) {
+      var m = /[?&]after=([^&]+)/.exec(next.getAttribute('href') || '');
+      if (m) nextAfter = decodeURIComponent(m[1]);
+    }
+    return { items: items, after: nextAfter };
+  }
+
+  function getHtml() {
+    return getText(htmlURL()).then(function (r) {
+      if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
+      var res = parseHtml(r.body);
+      if (!res.items.length) throw new Error('no posts found on the page (age check or login page?)');
+      return res;
+    });
+  }
+
+  function fetchPage() {
+    if (mode === 'html') return getHtml();
+    if (mode === 'json') return getJson();
+    return getJson().then(function (r) { mode = 'json'; return r; }, function (e1) {
+      return getHtml().then(function (r) { mode = 'html'; return r; }, function (e2) {
+        throw new Error(friendly(e1) + '  [page view: ' + e2.message + ']');
+      });
+    });
+  }
+
+  // ---------- drawing ----------
   function best(arr, src) {
     var pick = null;
     for (var i = 0; i < arr.length; i++) {
@@ -129,7 +252,7 @@ select{flex:0 0 auto;max-width:42%}
         var arr2 = (im.resolutions || []).map(function (x) { return { u: x.url, w: x.width, h: x.height }; });
         var b2 = best(arr2, { u: im.source.url, w: im.source.width, h: im.source.height });
         if (b2 && b2.u) out.push(b2);
-      } else if (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(d.url || '')) {
+      } else if (/^https?:\/\/[^ ]+\.(jpe?g|png|webp|gif)(\?|$)/i.test(d.url || '')) {
         out.push({ u: d.url, w: 0, h: 0 });
       }
     } catch (e) {}
@@ -188,37 +311,45 @@ select{flex:0 0 auto;max-width:42%}
     }
   }
 
+  function showError(text) {
+    msg.textContent = '';
+    var p = document.createElement('div');
+    p.textContent = text;
+    msg.appendChild(p);
+    var links = document.createElement('div');
+    links.style.marginTop = '10px';
+    [['Retry', null], ['Log in', 'https://old.reddit.com/login'], ['Preferences', 'https://old.reddit.com/prefs/']].forEach(function (l) {
+      var a = document.createElement('a');
+      a.textContent = l[0];
+      a.href = l[1] || '#';
+      if (!l[1]) a.addEventListener('click', function (e) { e.preventDefault(); load(); });
+      links.appendChild(a);
+    });
+    msg.appendChild(links);
+  }
+
   function load() {
     if (loading || done) return;
     loading = true;
     var my = gen;
     msg.textContent = 'Loading...';
-    fetch(listURL(), { credentials: 'include', headers: { 'Accept': 'application/json' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        if (my !== gen) return;
-        var items = (j && j.data && j.data.children) || [];
-        items.forEach(function (c) {
-          if (c.kind === 't3' && c.data && !c.data.stickied) {
-            var el = card(c.data);
-            feed.appendChild(el);
-            activate(el);
-          }
-        });
-        after = j.data ? j.data.after : null;
-        if (!after) done = true;
-        msg.textContent = (done && !feed.children.length) ? 'Nothing here.' : '';
-        loading = false;
-        check();
-      })
-      .catch(function (e) {
-        if (my !== gen) return;
-        loading = false;
-        msg.textContent = "Couldn't load (" + e.message + "). For 18+ communities, log in or confirm your age in Site view first.";
+    fetchPage().then(function (res) {
+      if (my !== gen) return;
+      res.items.forEach(function (d) {
+        var el = card(d);
+        feed.appendChild(el);
+        activate(el);
       });
+      after = res.after;
+      if (!after) done = true;
+      msg.textContent = (done && !feed.children.length) ? 'Nothing here.' : '';
+      loading = false;
+      check();
+    }).catch(function (e) {
+      if (my !== gen) return;
+      loading = false;
+      showError(e.message || String(e));
+    });
   }
 
   function check() {
@@ -228,7 +359,7 @@ select{flex:0 0 auto;max-width:42%}
 
   function render() {
     gen++;
-    after = null; done = false; loading = false;
+    after = null; done = false; loading = false; mode = null;
     feed.innerHTML = '';
     msg.textContent = '';
     window.scrollTo(0, 0);
