@@ -34,9 +34,11 @@ class BrowserActivity : Activity() {
             setOnEditorActionListener { _, _, _ -> load(text.toString()); true }
         }
         val go = Button(this).apply { text = "Go"; setOnClickListener { load(urlBox.text.toString()) } }
+        val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
         bar.addView(back)
         bar.addView(urlBox)
         bar.addView(go)
+        bar.addView(feedBtn)
 
         web = WebView(this)
         web.settings.javaScriptEnabled = true
@@ -44,22 +46,20 @@ class BrowserActivity : Activity() {
         web.settings.mediaPlaybackRequiresUserGesture = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? =
-                ImageProxy.handle(this@BrowserActivity, r, p)
-
-            override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
-                val u = r?.url ?: return true
-                val s = u.scheme
-                if (s != "http" && s != "https") return true
-                val fixed = oldify(u.toString())
-                if (fixed != u.toString()) { v?.loadUrl(fixed); return true }
-                return false
+            override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
+                // our own phone-friendly feed page, served from inside the app
+                if (r.isForMainFrame && r.url.host == "old.reddit.com" && r.url.path == "/__feed") {
+                    return WebResourceResponse(
+                        "text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"),
+                        this@BrowserActivity.assets.open("feed.html")
+                    )
+                }
+                return ImageProxy.handle(this@BrowserActivity, r, p)
             }
 
-            override fun onPageFinished(v: WebView?, url: String?) {
-                if (p.getBoolean("feed", true) && Uri.parse(url ?: "").host == "old.reddit.com") {
-                    v?.evaluateJavascript(FeedMode.JS, null)
-                }
+            override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
+                val s = r?.url?.scheme
+                return s != "http" && s != "https"
             }
 
             override fun onPageStarted(v: WebView?, url: String?, f: Bitmap?) {
@@ -76,7 +76,12 @@ class BrowserActivity : Activity() {
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+        if (p.getBoolean("feedmode", true)) web.loadUrl(FEED)
+        else load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+    }
+
+    companion object {
+        const val FEED = "https://old.reddit.com/__feed"
     }
 
     private fun load(input: String) {
@@ -87,15 +92,7 @@ class BrowserActivity : Activity() {
             s.contains(".") && !s.contains(" ") -> "https://$s"
             else -> "https://duckduckgo.com/?q=" + Uri.encode(s)
         }
-        web.loadUrl(oldify(url))
-    }
-
-    // The new Reddit website can't be edited, so always use old.reddit.com
-    private fun oldify(url: String): String {
-        val u = Uri.parse(url)
-        return if (u.host in setOf("reddit.com", "www.reddit.com", "m.reddit.com", "np.reddit.com"))
-            u.buildUpon().authority("old.reddit.com").build().toString()
-        else url
+        web.loadUrl(url)
     }
 
     @Suppress("DEPRECATION")

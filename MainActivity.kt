@@ -60,10 +60,10 @@ class MainActivity : Activity() {
             text = "Open safe browser"
             setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java)) }
         })
+        root.addView(check("Open in the feed view (only titles and pictures, made for phones)", "feedmode", true))
         root.addView(check("Block videos (they can't be censored)", "blockvideo", true))
-        root.addView(check("Photo feed on Reddit: only subreddit, title and picture", "feed", true))
         root.addView(EditText(this).apply {
-            hint = "Start page"
+            hint = "Start page for the normal site view"
             setText(p.getString("home", "https://old.reddit.com"))
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) { p.edit().putString("home", s.toString()).apply() }
