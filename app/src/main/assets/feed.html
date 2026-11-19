@@ -24,6 +24,15 @@ select{flex:0 0 auto;max-width:42%}
 #msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
 #msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
 #more{height:1px}
+.ph{cursor:pointer}
+#viewer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:none;align-items:center;justify-content:center;background:#000}
+#viewer img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+#viewer button,#viewer a{position:absolute;z-index:2;background:rgba(30,30,34,.85);color:#fff;border:0;border-radius:22px;padding:10px 16px;font:inherit;text-decoration:none}
+#vclose{top:calc(env(safe-area-inset-top) + 10px);right:12px}
+#vpost{top:calc(env(safe-area-inset-top) + 10px);left:12px}
+#vprev{left:10px;top:50%}
+#vnext{right:10px;top:50%}
+#vcount{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:0;right:0;text-align:center;color:#ddd;font-size:14px;pointer-events:none}
 </style>
 </head>
 <body>
@@ -41,6 +50,7 @@ select{flex:0 0 auto;max-width:42%}
 <main id="feed"></main>
 <div id="msg"></div>
 <div id="more"></div>
+<div id="viewer"><img id="vimg" alt=""><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -245,15 +255,15 @@ select{flex:0 0 auto;max-width:42%}
           var arr = (m.p || []).map(function (x) { return { u: x.u, w: x.x, h: x.y }; });
           var src = { u: m.s.u || m.s.gif, w: m.s.x, h: m.s.y };
           var b = best(arr, src);
-          if (b && b.u) out.push(b);
+          if (b && b.u) out.push({ u: b.u, w: b.w, h: b.h, full: src.u });
         });
       } else if (d.preview && d.preview.images && d.preview.images[0]) {
         var im = d.preview.images[0];
         var arr2 = (im.resolutions || []).map(function (x) { return { u: x.url, w: x.width, h: x.height }; });
         var b2 = best(arr2, { u: im.source.url, w: im.source.width, h: im.source.height });
-        if (b2 && b2.u) out.push(b2);
+        if (b2 && b2.u) out.push({ u: b2.u, w: b2.w, h: b2.h, full: im.source.url });
       } else if (/^https?:\/\/[^ ]+\.(jpe?g|png|webp|gif)(\?|$)/i.test(d.url || '')) {
-        out.push({ u: d.url, w: 0, h: 0 });
+        out.push({ u: d.url, w: 0, h: 0, full: d.url });
       }
     } catch (e) {}
     return { list: out, total: total, video: video };
@@ -266,7 +276,7 @@ select{flex:0 0 auto;max-width:42%}
     box.appendChild(t);
   }
 
-  function ph(p, info, i) {
+  function ph(p, info, i, perma) {
     var box = document.createElement('div');
     box.className = 'ph';
     if (p.w && p.h) box.style.aspectRatio = p.w + ' / ' + p.h; else box.style.minHeight = '220px';
@@ -278,13 +288,15 @@ select{flex:0 0 auto;max-width:42%}
     im.onload = function () {
       im.className = 'ok';
       box.classList.add('done');
-      if (!(p.w && p.h)) {
-        box.style.aspectRatio = im.naturalWidth + ' / ' + im.naturalHeight;
-        box.style.minHeight = '0';
-      }
+      // follow the real shape of the (possibly zoomed or cropped) picture
+      box.style.aspectRatio = im.naturalWidth + ' / ' + im.naturalHeight;
+      box.style.minHeight = '0';
     };
     im.onerror = function () { box.classList.add('err'); };
     box.appendChild(im);
+    box.addEventListener('click', function () {
+      if (im.classList.contains('ok')) openViewer(info.list, i, perma);
+    });
     if (info.video && i === 0) tag(box, 'VIDEO');
     else if (info.total > 1) tag(box, (i + 1) + '/' + info.total);
     return box;
@@ -299,7 +311,7 @@ select{flex:0 0 auto;max-width:42%}
     a.href = 'https://old.reddit.com' + (d.permalink || '');
     c.appendChild(a);
     var info = pics(d);
-    info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i)); });
+    info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i, a.href)); });
     return c;
   }
 
@@ -367,6 +379,48 @@ select{flex:0 0 auto;max-width:42%}
     document.title = state.src || 'front page';
     load();
   }
+
+  // ---------- full screen viewer ----------
+  var viewer = $('viewer'), vimg = $('vimg'), vcount = $('vcount'), vpost = $('vpost');
+  var vprev = $('vprev'), vnext = $('vnext');
+  var vlist = [], vi = 0, vopen = false, vtoken = 0;
+
+  function showAt(i) {
+    vi = i;
+    var it = vlist[i];
+    var my = ++vtoken;
+    vimg.src = it.u;                          // the censored picture we already have: shows instantly
+    vcount.textContent = vlist.length > 1 ? (i + 1) + ' / ' + vlist.length : '';
+    vprev.style.display = vnext.style.display = vlist.length > 1 ? '' : 'none';
+    if (it.full && it.full !== it.u) {        // then swap in the full size one (also censored by the app)
+      var big = new Image();
+      big.onload = function () { if (my === vtoken) vimg.src = it.full; };
+      big.src = it.full;
+    }
+  }
+  function openViewer(list, i, post) {
+    vlist = list;
+    vpost.href = post || '#';
+    showAt(i);
+    viewer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    if (!vopen) { vopen = true; history.pushState({ v: 1 }, ''); }   // so the phone's back button closes it
+  }
+  function closeViewer(fromPop) {
+    if (!vopen) return;
+    vopen = false;
+    vtoken++;
+    viewer.style.display = 'none';
+    vimg.removeAttribute('src');
+    document.body.style.overflow = '';
+    if (!fromPop) history.back();
+  }
+  window.addEventListener('popstate', function () { if (vopen) closeViewer(true); });
+  $('vclose').addEventListener('click', function () { closeViewer(false); });
+  vimg.addEventListener('click', function () { closeViewer(false); });
+  viewer.addEventListener('click', function (e) { if (e.target === viewer) closeViewer(false); });
+  vprev.addEventListener('click', function () { showAt((vi + vlist.length - 1) % vlist.length); });
+  vnext.addEventListener('click', function () { showAt((vi + 1) % vlist.length); });
 
   q.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); q.blur(); go(); }
