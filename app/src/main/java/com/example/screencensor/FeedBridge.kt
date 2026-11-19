@@ -23,8 +23,10 @@ class FeedBridge(private val web: WebView, private val ua: String) {
             var body = ""
             try {
                 if (!allowed) throw IOException("not allowed here")
-                if (!path.startsWith("/") || path.startsWith("//")) throw IOException("bad path")
-                val url = "https://old.reddit.com$path"
+                val www = path.startsWith("@www")
+                val rest = if (www) path.removePrefix("@www") else path
+                if (!rest.startsWith("/") || rest.startsWith("//")) throw IOException("bad path")
+                val url = "https://" + (if (www) "www.reddit.com" else "old.reddit.com") + rest
                 val c = URL(url).openConnection() as HttpURLConnection
                 c.connectTimeout = 10000
                 c.readTimeout = 20000

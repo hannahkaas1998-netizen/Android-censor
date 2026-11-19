@@ -40,6 +40,9 @@ object SettingsUi {
             })
         }
 
+        root.addView(label("Videos"))
+        root.addView(check("Block videos (they can't be censored; untick to watch them uncensored)", "blockvideo", true))
+
         root.addView(label("Censor"))
         root.addView(check("Nudity (breasts, genitals, anus)", "nudity", true))
         root.addView(check("Male genitals (untick to leave them uncovered)", "male", true))
@@ -53,7 +56,7 @@ object SettingsUi {
         root.addView(radios("cover", "parts", listOf("parts" to "Detected areas only", "group" to "Whole body area", "screen" to "Entire picture")))
         root.addView(label("Style"))
         root.addView(radios("style", "mosaic", listOf("mosaic" to "Mosaic", "blur" to "Blur", "solid" to "Solid box")))
-        strength("Pixelation strength (higher = chunkier)", "pixel", 6)
+        strength("Pixelation distortion (higher = chunkier and more scrambled)", "pixel", 7)
         strength("Blur strength (higher = blurrier)", "blurs", 5)
 
         root.addView(label("Text on the cover"))

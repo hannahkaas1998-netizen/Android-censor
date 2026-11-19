@@ -36,7 +36,6 @@ class MainActivity : Activity() {
             setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java)) }
         })
         root.addView(check("Open in the feed view (only titles and pictures, made for phones)", "feedmode", true))
-        root.addView(check("Block videos (they can't be censored)", "blockvideo", true))
         root.addView(EditText(this).apply {
             hint = "Start page for the normal site view"
             setText(p.getString("home", "https://old.reddit.com"))
