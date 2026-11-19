@@ -24,6 +24,9 @@ select{flex:0 0 auto;max-width:42%}
 #msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
 #msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
 #more{height:1px}
+#note{display:none;margin:10px 12px;padding:10px 12px;border-radius:10px;background:#2b2417;color:#e6c27a;font-size:13px;line-height:1.4}
+#vvid{display:none;max-width:100%;max-height:100%;background:#000}
+#vmsg{display:none;position:absolute;left:16px;right:16px;bottom:70px;z-index:3;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.75);color:#ddd;text-align:center;font-size:14px;line-height:1.4}
 .ph{cursor:pointer}
 #viewer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:none;align-items:center;justify-content:center;background:#000}
 #viewer img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
@@ -47,10 +50,11 @@ select{flex:0 0 auto;max-width:42%}
     <option value="top:all">Top all time</option>
   </select>
 </header>
+<div id="note"></div>
 <main id="feed"></main>
 <div id="msg"></div>
 <div id="more"></div>
-<div id="viewer"><img id="vimg" alt=""><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
+<div id="viewer"><img id="vimg" alt=""><video id="vvid" controls playsinline loop></video><div id="vmsg"></div><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -84,8 +88,28 @@ select{flex:0 0 auto;max-width:42%}
       return r.text().then(function (t) { return { status: r.status, body: t }; });
     });
   }
-  function getText(path) {
-    return nativeGet(path).catch(function () { return pageGet(path); });
+  function okR(r) { return r && r.status >= 200 && r.status < 300; }
+  // Tries the app's own download, then the page's fetch, then (for data) www.reddit.com.
+  // Returns the first answer that worked; if none did, the first answer we got.
+  function getText(path, allowWww) {
+    var tries = [
+      function () { return nativeGet(path); },
+      function () { return pageGet(path); }
+    ];
+    if (allowWww) tries.push(function () { return nativeGet('@www' + path); });
+    var first = null, firstErr = null;
+    function next(i) {
+      if (i >= tries.length) return first ? Promise.resolve(first) : Promise.reject(firstErr || new Error('failed'));
+      return tries[i]().then(function (r) {
+        if (okR(r)) return r;
+        if (!first) first = r;
+        return next(i + 1);
+      }, function (e) {
+        if (!firstErr) firstErr = e;
+        return next(i + 1);
+      });
+    }
+    return next(0);
   }
 
   function HttpErr(status, body) {
@@ -174,7 +198,7 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function getJson() {
-    return getText(listURL()).then(function (r) {
+    return getText(listURL(), true).then(function (r) {
       if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
       var j;
       try { j = JSON.parse(r.body); } catch (x) { throw new Error('Reddit sent a web page instead of data'); }
@@ -215,7 +239,7 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function getHtml() {
-    return getText(htmlURL()).then(function (r) {
+    return getText(htmlURL(), false).then(function (r) {
       if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
       var res = parseHtml(r.body);
       if (!res.items.length) throw new Error('no posts found on the page (age check or login page?)');
@@ -227,7 +251,13 @@ select{flex:0 0 auto;max-width:42%}
     if (mode === 'html') return getHtml();
     if (mode === 'json') return getJson();
     return getJson().then(function (r) { mode = 'json'; return r; }, function (e1) {
-      return getHtml().then(function (r) { mode = 'html'; return r; }, function (e2) {
+      return getHtml().then(function (r) {
+        mode = 'html';
+        var n = $('note');
+        n.textContent = 'Limited view: Reddit blocked the data route (' + friendly(e1) + '), so albums and videos can\'t be shown here.';
+        n.style.display = 'block';
+        return r;
+      }, function (e2) {
         throw new Error(friendly(e1) + '  [page view: ' + e2.message + ']');
       });
     });
@@ -242,9 +272,30 @@ select{flex:0 0 auto;max-width:42%}
     return pick || src;
   }
 
+  function videoSrcs(d) {
+    var out = [];
+    try {
+      var m = (d.secure_media && d.secure_media.reddit_video) || (d.media && d.media.reddit_video);
+      if (m) { if (m.hls_url) out.push(m.hls_url); if (m.fallback_url) out.push(m.fallback_url); }
+      var rp = d.preview && d.preview.reddit_video_preview;
+      if (rp && rp.fallback_url) out.push(rp.fallback_url);
+      var v = d.preview && d.preview.images && d.preview.images[0] && d.preview.images[0].variants;
+      if (v && v.mp4 && v.mp4.source && v.mp4.source.url) out.push(v.mp4.source.url);
+    } catch (e) {}
+    return out;
+  }
+
   function pics(d) {
+    // a crosspost carries its pictures in the original post
+    if (d.crosspost_parent_list && d.crosspost_parent_list.length && !d.preview && !d.is_gallery) {
+      var o = d.crosspost_parent_list[0], c = {};
+      for (var k in o) c[k] = o[k];
+      c.title = d.title; c.permalink = d.permalink;
+      d = c;
+    }
     var out = [], total = 0;
-    var video = !!d.is_video || /video/.test(d.post_hint || '');
+    var vsrc = videoSrcs(d);
+    var video = !!d.is_video || /video/.test(d.post_hint || '') || vsrc.length > 0;
     try {
       if (d.is_gallery && d.media_metadata) {
         var items = (d.gallery_data && d.gallery_data.items) || [];
@@ -266,7 +317,7 @@ select{flex:0 0 auto;max-width:42%}
         out.push({ u: d.url, w: 0, h: 0, full: d.url });
       }
     } catch (e) {}
-    return { list: out, total: total, video: video };
+    return { list: out, total: total, video: video, vsrc: vsrc };
   }
 
   function tag(box, text) {
@@ -295,7 +346,9 @@ select{flex:0 0 auto;max-width:42%}
     im.onerror = function () { box.classList.add('err'); };
     box.appendChild(im);
     box.addEventListener('click', function () {
-      if (im.classList.contains('ok')) openViewer(info.list, i, perma);
+      if (info.video && info.vsrc.length) openVideo(info.vsrc, p.u, perma);
+      else if (info.video) location.href = perma;
+      else if (im.classList.contains('ok')) openViewer(info.list, i, perma);
     });
     if (info.video && i === 0) tag(box, 'VIDEO');
     else if (info.total > 1) tag(box, (i + 1) + '/' + info.total);
@@ -312,6 +365,14 @@ select{flex:0 0 auto;max-width:42%}
     c.appendChild(a);
     var info = pics(d);
     info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i, a.href)); });
+    if (!info.list.length && info.vsrc.length) {          // video without a poster picture
+      var vb = document.createElement('div');
+      vb.className = 'ph done';
+      vb.style.minHeight = '140px';
+      tag(vb, 'VIDEO \u25B6');
+      vb.addEventListener('click', function () { openVideo(info.vsrc, '', a.href); });
+      c.appendChild(vb);
+    }
     return c;
   }
 
@@ -374,6 +435,7 @@ select{flex:0 0 auto;max-width:42%}
     after = null; done = false; loading = false; mode = null;
     feed.innerHTML = '';
     msg.textContent = '';
+    $('note').style.display = 'none';
     window.scrollTo(0, 0);
     try { localStorage.setItem('feed_last', JSON.stringify(state)); } catch (e) {}
     document.title = state.src || 'front page';
@@ -382,13 +444,16 @@ select{flex:0 0 auto;max-width:42%}
 
   // ---------- full screen viewer ----------
   var viewer = $('viewer'), vimg = $('vimg'), vcount = $('vcount'), vpost = $('vpost');
-  var vprev = $('vprev'), vnext = $('vnext');
+  var vprev = $('vprev'), vnext = $('vnext'), vvid = $('vvid'), vmsg = $('vmsg');
+  var vsrcs = [], vsi = 0;
   var vlist = [], vi = 0, vopen = false, vtoken = 0;
 
   function showAt(i) {
     vi = i;
     var it = vlist[i];
     var my = ++vtoken;
+    stopVideo();
+    vimg.style.display = '';
     vimg.src = it.u;                          // the censored picture we already have: shows instantly
     vcount.textContent = vlist.length > 1 ? (i + 1) + ' / ' + vlist.length : '';
     vprev.style.display = vnext.style.display = vlist.length > 1 ? '' : 'none';
@@ -397,6 +462,40 @@ select{flex:0 0 auto;max-width:42%}
       big.onload = function () { if (my === vtoken) vimg.src = it.full; };
       big.src = it.full;
     }
+  }
+  function stopVideo() {
+    vsrcs = []; vsi = 0;
+    try { vvid.pause(); vvid.removeAttribute('src'); vvid.load(); } catch (e) {}
+    vvid.style.display = 'none';
+    vmsg.style.display = 'none';
+  }
+  function playNext() {
+    if (vsi >= vsrcs.length) {
+      if (!vsrcs.length) return;
+      vmsg.textContent = "Couldn't play this video. Videos can't be censored, so they are blocked by default. To watch them uncensored, untick \u201cBlock videos\u201d in the \u2699 menu at the top of the browser.";
+      vmsg.style.display = 'block';
+      return;
+    }
+    vvid.src = vsrcs[vsi++];
+    var pr = vvid.play();
+    if (pr && pr.catch) pr.catch(function () {});
+  }
+  vvid.addEventListener('error', playNext);
+  function openVideo(srcs, poster, post) {
+    vtoken++;
+    vlist = [];
+    vpost.href = post || '#';
+    vimg.style.display = 'none';
+    vprev.style.display = vnext.style.display = 'none';
+    vcount.textContent = '';
+    vmsg.style.display = 'none';
+    vvid.poster = poster || '';
+    vvid.style.display = 'block';
+    vsrcs = srcs; vsi = 0;
+    viewer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    if (!vopen) { vopen = true; history.pushState({ v: 1 }, ''); }
+    playNext();
   }
   function openViewer(list, i, post) {
     vlist = list;
@@ -411,6 +510,7 @@ select{flex:0 0 auto;max-width:42%}
     vopen = false;
     vtoken++;
     viewer.style.display = 'none';
+    stopVideo();
     vimg.removeAttribute('src');
     document.body.style.overflow = '';
     if (!fromPop) history.back();
