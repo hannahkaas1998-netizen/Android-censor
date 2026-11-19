@@ -1,6 +1,9 @@
 package com.example.screencensor
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
+import android.content.SharedPreferences
+import android.widget.ScrollView
 import android.app.Activity
 import android.graphics.Bitmap
 import android.net.Uri
@@ -36,10 +39,12 @@ class BrowserActivity : Activity() {
         }
         val go = Button(this).apply { text = "Go"; setOnClickListener { load(urlBox.text.toString()) } }
         val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
+        val gear = Button(this).apply { text = "\u2699"; setOnClickListener { openSettings(p) } }
         bar.addView(back)
         bar.addView(urlBox)
         bar.addView(go)
         bar.addView(feedBtn)
+        bar.addView(gear)
 
         web = WebView(this)
         web.settings.javaScriptEnabled = true
@@ -91,6 +96,21 @@ class BrowserActivity : Activity() {
 
     companion object {
         const val FEED = "https://old.reddit.com/__feed"
+    }
+
+    private fun sig(p: SharedPreferences) = p.all.filterKeys { it != "home" }.toString()
+
+    /** Censor settings, right here on top of the browser. The page reloads when you close it if anything changed. */
+    private fun openSettings(p: SharedPreferences) {
+        val before = sig(p)
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 16, 40, 16) }
+        SettingsUi.addSettings(this, root, p)
+        AlertDialog.Builder(this)
+            .setTitle("Censor settings")
+            .setView(ScrollView(this).apply { addView(root) })
+            .setPositiveButton("Done", null)
+            .setOnDismissListener { if (sig(p) != before) web.reload() }
+            .show()
     }
 
     private fun load(input: String) {

@@ -25,24 +25,26 @@ class HeelDetector(ctx: Context) {
         }.map { it.index }
     }
 
+    class Result(val heels: List<RectF>, val footwear: List<RectF>)
+    private class Cand(val score: Float, val rect: RectF, val heel: Boolean)
+
     /**
      * Looks at the whole picture first. If nothing is found it also looks at zoomed-in pieces,
-     * which catches small heels in big pictures.
+     * which catches small heels in big pictures. Real "high heels" and other footwear are kept apart.
      */
-    fun detect(bmp: Bitmap, minScore: Float, includeFootwear: Boolean): List<RectF> {
-        val idx = if (includeFootwear) heelIdx + footIdx else heelIdx
-        var found = run(bmp, minScore, idx)
+    fun detect(bmp: Bitmap, minScore: Float): Result {
+        var found = run(bmp, minScore)
         if (found.isEmpty()) {
-            val all = ArrayList<Pair<Float, RectF>>()
+            val all = ArrayList<Cand>()
             for (t in tiles(bmp.width, bmp.height)) {
                 val crop = Bitmap.createBitmap(bmp, t.left, t.top, t.width(), t.height())
-                for ((s, r) in run(crop, minScore, idx)) {
-                    all.add(Pair(s, RectF(r.left + t.left, r.top + t.top, r.right + t.left, r.bottom + t.top)))
+                for (x in run(crop, minScore)) {
+                    all.add(Cand(x.score, RectF(x.rect.left + t.left, x.rect.top + t.top, x.rect.right + t.left, x.rect.bottom + t.top), x.heel))
                 }
             }
             found = nms(all)
         }
-        return found.map { it.second }
+        return Result(found.filter { it.heel }.map { it.rect }, found.filter { !it.heel }.map { it.rect })
     }
 
     private fun positions(len: Int, t: Int): List<Int> {
@@ -63,7 +65,7 @@ class HeelDetector(ctx: Context) {
         return if (out.size > 9) out.take(9) else out
     }
 
-    private fun run(bmp: Bitmap, minScore: Float, idx: List<Int>): List<Pair<Float, RectF>> {
+    private fun run(bmp: Bitmap, minScore: Float): List<Cand> {
         val size = 640
         val w = bmp.width
         val h = bmp.height
@@ -83,7 +85,7 @@ class HeelDetector(ctx: Context) {
             buf.put(i + plane, ((p shr 8) and 255) / 255f)
             buf.put(i + 2 * plane, (p and 255) / 255f)
         }
-        val cands = ArrayList<Pair<Float, RectF>>()
+        val cands = ArrayList<Cand>()
         val tensor = OnnxTensor.createTensor(env, buf, longArrayOf(1, 3, size.toLong(), size.toLong()))
         try {
             session.run(mapOf(session.inputNames.first() to tensor)).use { r ->
@@ -91,12 +93,17 @@ class HeelDetector(ctx: Context) {
                 val n = out.info.shape[2].toInt()
                 val fb = out.floatBuffer
                 for (j in 0 until n) {
-                    var best = 0f
-                    for (k in idx) {
+                    var bestHeel = 0f
+                    for (k in heelIdx) {
                         val sc = fb.get((4 + k) * n + j)
-                        if (sc > best) best = sc
+                        if (sc > bestHeel) bestHeel = sc
                     }
-                    if (best >= minScore) {
+                    var bestFoot = 0f
+                    for (k in footIdx) {
+                        val sc = fb.get((4 + k) * n + j)
+                        if (sc > bestFoot) bestFoot = sc
+                    }
+                    if (bestHeel >= minScore || bestFoot >= minScore) {
                         val cx = fb.get(j)
                         val cy = fb.get(n + j)
                         val bw = fb.get(2 * n + j)
@@ -105,7 +112,10 @@ class HeelDetector(ctx: Context) {
                         val t = ((cy - bh / 2) / s).coerceIn(0f, h.toFloat())
                         val rr = ((cx + bw / 2) / s).coerceIn(0f, w.toFloat())
                         val bb = ((cy + bh / 2) / s).coerceIn(0f, h.toFloat())
-                        if (rr > l && bb > t) cands.add(Pair(best, RectF(l, t, rr, bb)))
+                        if (rr > l && bb > t) {
+                            if (bestHeel >= minScore) cands.add(Cand(bestHeel, RectF(l, t, rr, bb), true))
+                            if (bestFoot >= minScore) cands.add(Cand(bestFoot, RectF(l, t, rr, bb), false))
+                        }
                     }
                 }
             }
@@ -115,10 +125,10 @@ class HeelDetector(ctx: Context) {
         return nms(cands)
     }
 
-    private fun nms(c: List<Pair<Float, RectF>>): List<Pair<Float, RectF>> {
-        val keep = ArrayList<Pair<Float, RectF>>()
-        for (x in c.sortedByDescending { it.first }) {
-            if (keep.none { iou(it.second, x.second) > 0.5f }) keep.add(x)
+    private fun nms(c: List<Cand>): List<Cand> {
+        val keep = ArrayList<Cand>()
+        for (x in c.sortedByDescending { it.score }) {
+            if (keep.none { it.heel == x.heel && iou(it.rect, x.rect) > 0.5f }) keep.add(x)
         }
         return keep
     }

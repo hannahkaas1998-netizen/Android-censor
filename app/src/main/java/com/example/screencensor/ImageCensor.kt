@@ -41,9 +41,11 @@ object ImageCensor {
             if (hd != null) {
                 val more = p.getBoolean("heelmore", true)
                 val thr = (0.35f - 0.033f * p.getInt("heelsens", 7)).coerceAtLeast(0.02f)
-                val hs = ArrayList<RectF>(hd.detect(work, thr, more))
-                if (more) {
-                    // feet in the picture count too
+                val res = hd.detect(work, thr)
+                val hs = ArrayList<RectF>(res.heels)
+                if (hs.isEmpty() && more) {
+                    // no real heels: other footwear and feet count instead
+                    hs.addAll(res.footwear)
                     e.nude.detect(work, 0.25f).filter { it.label in Detector.FEET }.forEach { hs.add(RectF(it.box)) }
                 }
                 if (hs.isNotEmpty()) {
@@ -76,20 +78,25 @@ object ImageCensor {
         hs.forEach { u.union(it) }
         val w = src.width.toFloat()
         val h = src.height.toFloat()
-        val aspect = w / h
-        var cw = u.width() * 1.5f
-        var ch = u.height() * 1.5f
-        if (cw / ch < aspect) cw = ch * aspect else ch = cw / aspect
-        if (cw > w || ch > h) {
-            val k = min(w / cw, h / ch)
-            cw *= k
-            ch *= k
-        }
-        val l = (u.centerX() - cw / 2).coerceIn(0f, w - cw)
-        val t = (u.centerY() - ch / 2).coerceIn(0f, h - ch)
+        val px = u.width() * 0.15f
+        val py = u.height() * 0.15f
+        var l = max(0f, u.left - px)
+        var t = max(0f, u.top - py)
+        var cw = min(w, u.right + px) - l
+        var ch = min(h, u.bottom + py) - t
+        // keep a sensible shape (between 3:4 tall and 16:9 wide) by growing the short side
+        val ar = cw / ch
+        if (ar < 0.75f) { val nw = ch * 0.75f; l -= (nw - cw) / 2; cw = nw }
+        else if (ar > 1.78f) { val nh = cw / 1.78f; t -= (nh - ch) / 2; ch = nh }
+        cw = min(cw, w)
+        ch = min(ch, h)
+        l = l.coerceIn(0f, w - cw)
+        t = t.coerceIn(0f, h - ch)
         val crop = Bitmap.createBitmap(src, l.toInt(), t.toInt(), max(2, cw.toInt()), max(2, ch.toInt()))
-        val k = min(1f, 1600f / max(src.width, src.height))
-        return Bitmap.createScaledBitmap(crop, max(2, (src.width * k).toInt()), max(2, (src.height * k).toInt()), true)
+        // blow it up to fill the screen width (at most 3x, never above 1600px)
+        val k = min(min(3f, max(1f, 1080f / crop.width)), 1600f / max(crop.width, crop.height))
+        if (k <= 1.02f) return crop
+        return Bitmap.createScaledBitmap(crop, (crop.width * k).toInt(), (crop.height * k).toInt(), true)
     }
 
     private fun isolate(src: Bitmap, hs: List<RectF>, blur: Boolean, p: SharedPreferences): Bitmap {
