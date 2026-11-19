@@ -39,11 +39,14 @@ object ImageCensor {
         if (mode != "off") {
             val hd = e.heels
             if (hd != null) {
-                val hs = hd.detect(work, 0.25f)
-                if (hs.isEmpty()) {
-                    if ((p.getString("heelnone", "hide") ?: "hide") == "hide")
-                        return placeholder(src.width, src.height, "NO HEELS")
-                } else {
+                val more = p.getBoolean("heelmore", true)
+                val thr = (0.35f - 0.033f * p.getInt("heelsens", 7)).coerceAtLeast(0.02f)
+                val hs = ArrayList<RectF>(hd.detect(work, thr, more))
+                if (more) {
+                    // feet in the picture count too
+                    e.nude.detect(work, 0.25f).filter { it.label in Detector.FEET }.forEach { hs.add(RectF(it.box)) }
+                }
+                if (hs.isNotEmpty()) {
                     work = when (mode) {
                         "zoom" -> zoom(work, hs)
                         "isolate_blur" -> isolate(work, hs, true, p)
@@ -51,6 +54,7 @@ object ImageCensor {
                     }
                     changed = true
                 }
+                // no heels found: the picture just goes through the normal censoring below
             }
         }
 

@@ -6,20 +6,64 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.*
 import java.nio.FloatBuffer
+import kotlin.math.ceil
 
-/** YOLOv8n trained on Open Images V7 (has a "High heels" class). Built into the APK by the workflow. */
+/** YOLOv8n trained on Open Images V7 (has "High heels", "Footwear", "Sandal", "Boot"). Built into the APK by the workflow. */
 class HeelDetector(ctx: Context) {
     private val env = OrtEnvironment.getEnvironment()
     private val session: OrtSession = env.createSession(ctx.assets.open("heels.onnx").readBytes())
     private val heelIdx: List<Int>
+    private val footIdx: List<Int>
 
     init {
         val names = ctx.assets.open("oiv7_names.txt").bufferedReader().readLines()
         heelIdx = names.withIndex().filter { it.value.contains("heel", ignoreCase = true) }.map { it.index }
         if (heelIdx.isEmpty()) throw IllegalStateException("no heel class in model")
+        footIdx = names.withIndex().filter {
+            val n = it.value.lowercase()
+            it.index !in heelIdx && (n == "footwear" || n == "sandal" || n == "boot" || n.contains("shoe"))
+        }.map { it.index }
     }
 
-    fun detect(bmp: Bitmap, minScore: Float): List<RectF> {
+    /**
+     * Looks at the whole picture first. If nothing is found it also looks at zoomed-in pieces,
+     * which catches small heels in big pictures.
+     */
+    fun detect(bmp: Bitmap, minScore: Float, includeFootwear: Boolean): List<RectF> {
+        val idx = if (includeFootwear) heelIdx + footIdx else heelIdx
+        var found = run(bmp, minScore, idx)
+        if (found.isEmpty()) {
+            val all = ArrayList<Pair<Float, RectF>>()
+            for (t in tiles(bmp.width, bmp.height)) {
+                val crop = Bitmap.createBitmap(bmp, t.left, t.top, t.width(), t.height())
+                for ((s, r) in run(crop, minScore, idx)) {
+                    all.add(Pair(s, RectF(r.left + t.left, r.top + t.top, r.right + t.left, r.bottom + t.top)))
+                }
+            }
+            found = nms(all)
+        }
+        return found.map { it.second }
+    }
+
+    private fun positions(len: Int, t: Int): List<Int> {
+        if (len <= t) return listOf(0)
+        val n = ceil((len - t) / (t * 0.7f)).toInt() + 1
+        return (0 until n).map { ((len - t) * it / (n - 1).toFloat()).toInt() }
+    }
+
+    private fun tiles(w: Int, h: Int): List<Rect> {
+        val m = minOf(w, h)
+        val ar = maxOf(w, h).toFloat() / m
+        val t = if (ar < 1.25f) (m * 0.6f).toInt() else m      // near-square: zoom in; otherwise slide along the long side
+        if (t < 64) return emptyList()
+        val out = ArrayList<Rect>()
+        for (y in positions(h, t)) for (x in positions(w, t)) {
+            out.add(Rect(x, y, minOf(w, x + t), minOf(h, y + t)))
+        }
+        return if (out.size > 9) out.take(9) else out
+    }
+
+    private fun run(bmp: Bitmap, minScore: Float, idx: List<Int>): List<Pair<Float, RectF>> {
         val size = 640
         val w = bmp.width
         val h = bmp.height
@@ -48,7 +92,7 @@ class HeelDetector(ctx: Context) {
                 val fb = out.floatBuffer
                 for (j in 0 until n) {
                     var best = 0f
-                    for (k in heelIdx) {
+                    for (k in idx) {
                         val sc = fb.get((4 + k) * n + j)
                         if (sc > best) best = sc
                     }
@@ -68,9 +112,13 @@ class HeelDetector(ctx: Context) {
         } finally {
             tensor.close()
         }
-        val keep = ArrayList<RectF>()
-        for ((_, r) in cands.sortedByDescending { it.first }) {
-            if (keep.none { iou(it, r) > 0.5f }) keep.add(r)
+        return nms(cands)
+    }
+
+    private fun nms(c: List<Pair<Float, RectF>>): List<Pair<Float, RectF>> {
+        val keep = ArrayList<Pair<Float, RectF>>()
+        for (x in c.sortedByDescending { it.first }) {
+            if (keep.none { iou(it.second, x.second) > 0.5f }) keep.add(x)
         }
         return keep
     }

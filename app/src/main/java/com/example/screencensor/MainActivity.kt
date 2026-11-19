@@ -120,8 +120,12 @@ class MainActivity : Activity() {
             "isolate_blur" to "Blur everything except the heels",
             "isolate_black" to "Black out everything except the heels"
         )))
-        root.addView(label("If a picture has no heels in it"))
-        root.addView(radios("heelnone", "hide", listOf("hide" to "Hide the picture", "show" to "Show it normally")))
+        strength("Heel detection sensitivity (higher = finds more)", "heelsens", 7)
+        root.addView(check("Also count feet and other footwear as heels", "heelmore", true))
+        root.addView(TextView(this).apply {
+            text = "Pictures where no heels are found are simply censored with your normal settings."
+            textSize = 13f
+        })
 
         root.addView(label("Other apps (screen overlay)"))
         root.addView(Button(this).apply { text = "Start overlay"; setOnClickListener { start() } })
