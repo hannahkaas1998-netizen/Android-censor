@@ -23,16 +23,31 @@ class FeedBridge(private val web: WebView, private val ua: String) {
             var body = ""
             try {
                 if (!allowed) throw IOException("not allowed here")
-                val www = path.startsWith("@www")
-                val rest = if (www) path.removePrefix("@www") else path
+                // optional prefixes: @www = www.reddit.com instead of old.reddit.com, @api = plain API-style identity
+                var rest = path
+                var www = false
+                var api = false
+                while (rest.startsWith("@")) {
+                    when {
+                        rest.startsWith("@www") -> { www = true; rest = rest.removePrefix("@www") }
+                        rest.startsWith("@api") -> { api = true; rest = rest.removePrefix("@api") }
+                        else -> throw IOException("bad path")
+                    }
+                }
                 if (!rest.startsWith("/") || rest.startsWith("//")) throw IOException("bad path")
                 val url = "https://" + (if (www) "www.reddit.com" else "old.reddit.com") + rest
                 val c = URL(url).openConnection() as HttpURLConnection
                 c.connectTimeout = 10000
                 c.readTimeout = 20000
                 c.instanceFollowRedirects = true
-                c.setRequestProperty("User-Agent", ua)
-                c.setRequestProperty("Accept", "application/json,text/html;q=0.9,*/*;q=0.8")
+                c.setRequestProperty(
+                    "User-Agent",
+                    if (api) "android:com.example.screencensor:v1.0 (personal feed reader)" else ua
+                )
+                c.setRequestProperty(
+                    "Accept",
+                    if (api) "application/json" else "application/json,text/html;q=0.9,*/*;q=0.8"
+                )
                 c.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                 CookieManager.getInstance().getCookie(url)?.let { c.setRequestProperty("Cookie", it) }
                 status = c.responseCode
