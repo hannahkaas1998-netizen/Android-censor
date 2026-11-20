@@ -89,22 +89,39 @@ select{flex:0 0 auto;max-width:42%}
     });
   }
   function okR(r) { return r && r.status >= 200 && r.status < 300; }
-  // Tries the app's own download, then the page's fetch, then (for data) www.reddit.com.
-  // Returns the first answer that worked; if none did, the first answer we got.
-  function getText(path, allowWww) {
-    var tries = [
-      function () { return nativeGet(path); },
-      function () { return pageGet(path); }
-    ];
-    if (allowWww) tries.push(function () { return nativeGet('@www' + path); });
+  function pageTitle(b) {
+    var m = /<title[^>]*>([^<]{0,70})/i.exec(b || '');
+    return m ? m[1].trim() : '';
+  }
+  // Every way we have of asking Reddit. The first answer that is really data (or a real listing page) wins.
+  var routes = [
+    { n: 'app',     f: function (p) { return nativeGet(p); } },
+    { n: 'page',    f: function (p) { return pageGet(p); } },
+    { n: 'app-api', f: function (p) { return nativeGet('@api' + p); } },
+    { n: 'www',     f: function (p) { return nativeGet('@www' + p); }, www: true },
+    { n: 'www-api', f: function (p) { return nativeGet('@www@api' + p); }, www: true }
+  ];
+  var goodRoute = { json: null, html: null };
+  var trace = [];
+  function getText(path, kind) {
+    var validate = kind === 'json'
+      ? function (b) { return /^\s*[\[{]/.test(b || ''); }
+      : function (b) { return (b || '').indexOf('siteTable') >= 0; };
+    var list = routes.filter(function (r) { return kind === 'json' || !r.www; });
+    var pref = goodRoute[kind];
+    if (pref) list.sort(function (a, b) { return (b.n === pref ? 1 : 0) - (a.n === pref ? 1 : 0); });
     var first = null, firstErr = null;
     function next(i) {
-      if (i >= tries.length) return first ? Promise.resolve(first) : Promise.reject(firstErr || new Error('failed'));
-      return tries[i]().then(function (r) {
-        if (okR(r)) return r;
-        if (!first) first = r;
+      if (i >= list.length) return first ? Promise.resolve(first) : Promise.reject(firstErr || new Error('failed'));
+      var r = list[i];
+      return r.f(path).then(function (res) {
+        if (okR(res) && validate(res.body)) { goodRoute[kind] = r.n; return res; }
+        var t = pageTitle(res.body);
+        trace.push(r.n + ': ' + (okR(res) ? 'not ' + kind + (t ? ' (' + t + ')' : '') : 'HTTP ' + res.status));
+        if (!first) first = res;
         return next(i + 1);
       }, function (e) {
+        trace.push(r.n + ': ' + (e && e.message ? e.message : 'error'));
         if (!firstErr) firstErr = e;
         return next(i + 1);
       });
@@ -198,7 +215,7 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function getJson() {
-    return getText(listURL(), true).then(function (r) {
+    return getText(listURL(), 'json').then(function (r) {
       if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
       var j;
       try { j = JSON.parse(r.body); } catch (x) { throw new Error('Reddit sent a web page instead of data'); }
@@ -222,12 +239,22 @@ select{flex:0 0 auto;max-width:42%}
           el.getAttribute('data-promoted') === 'true') continue;
       var a = el.querySelector('a.title');
       if (!a) continue;
-      items.push({
+      var u = el.getAttribute('data-url') || '';
+      var vm = /v\.redd\.it\/([A-Za-z0-9]+)/.exec(u);
+      var it = {
         title: a.textContent,
         permalink: el.getAttribute('data-permalink') || '',
-        url: el.getAttribute('data-url') || '',
-        is_video: /v\.redd\.it/.test(el.getAttribute('data-domain') || '')
-      });
+        url: u,
+        is_video: !!vm,
+        _album: /\/gallery\//.test(u)
+      };
+      if (vm) it._vsrc = [
+        'https://v.redd.it/' + vm[1] + '/HLSPlaylist.m3u8',
+        'https://v.redd.it/' + vm[1] + '/DASH_720.mp4',
+        'https://v.redd.it/' + vm[1] + '/DASH_480.mp4',
+        'https://v.redd.it/' + vm[1] + '/DASH_360.mp4'
+      ];
+      items.push(it);
     }
     var next = doc.querySelector('.next-button a');
     var nextAfter = null;
@@ -239,7 +266,7 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function getHtml() {
-    return getText(htmlURL(), false).then(function (r) {
+    return getText(htmlURL(), 'html').then(function (r) {
       if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
       var res = parseHtml(r.body);
       if (!res.items.length) throw new Error('no posts found on the page (age check or login page?)');
@@ -248,13 +275,15 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function fetchPage() {
+    if (!mode) trace.length = 0;
     if (mode === 'html') return getHtml();
     if (mode === 'json') return getJson();
     return getJson().then(function (r) { mode = 'json'; return r; }, function (e1) {
+      var jt = trace.join(' | ');
       return getHtml().then(function (r) {
         mode = 'html';
         var n = $('note');
-        n.textContent = 'Limited view: Reddit blocked the data route (' + friendly(e1) + '), so albums and videos can\'t be shown here.';
+        n.textContent = 'Limited view: Reddit blocked the data route (' + friendly(e1) + '), so albums and videos can\'t be shown here.  [' + jt + ']';
         n.style.display = 'block';
         return r;
       }, function (e2) {
@@ -273,6 +302,7 @@ select{flex:0 0 auto;max-width:42%}
   }
 
   function videoSrcs(d) {
+    if (d._vsrc) return d._vsrc;
     var out = [];
     try {
       var m = (d.secure_media && d.secure_media.reddit_video) || (d.media && d.media.reddit_video);
@@ -317,7 +347,7 @@ select{flex:0 0 auto;max-width:42%}
         out.push({ u: d.url, w: 0, h: 0, full: d.url });
       }
     } catch (e) {}
-    return { list: out, total: total, video: video, vsrc: vsrc };
+    return { list: out, total: total, video: video, vsrc: vsrc, album: !!d._album };
   }
 
   function tag(box, text) {
@@ -365,6 +395,14 @@ select{flex:0 0 auto;max-width:42%}
     c.appendChild(a);
     var info = pics(d);
     info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i, a.href)); });
+    if (!info.list.length && info.album) {                // album, but this view has no way to get its pictures
+      var ab = document.createElement('div');
+      ab.className = 'ph done';
+      ab.style.minHeight = '140px';
+      tag(ab, 'ALBUM \u2013 tap to open');
+      ab.addEventListener('click', function () { location.href = a.href; });
+      c.appendChild(ab);
+    }
     if (!info.list.length && info.vsrc.length) {          // video without a poster picture
       var vb = document.createElement('div');
       vb.className = 'ph done';
