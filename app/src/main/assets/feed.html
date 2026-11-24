@@ -8,7 +8,7 @@
 :root{color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#0e0e10;color:#f2f2f2;font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
-header{position:sticky;top:0;z-index:5;display:flex;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;background:#16161a;border-bottom:1px solid #26262c}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;background:#16161a;border-bottom:1px solid #26262c}
 input,select{font:inherit;color:#f2f2f2;background:#232329;border:1px solid #33333b;border-radius:10px;padding:10px 12px;outline:none}
 input{flex:1;min-width:0}
 select{flex:0 0 auto;max-width:42%}
@@ -24,6 +24,10 @@ select{flex:0 0 auto;max-width:42%}
 #msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
 #msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
 #more{height:1px}
+#opts{flex-basis:100%;display:flex;gap:20px;padding:0 2px;font-size:14px;color:#c8c8d0}
+#opts label{display:flex;align-items:center;gap:6px}
+#vsave{bottom:calc(env(safe-area-inset-bottom) + 12px);left:12px}
+#vsaveall{bottom:calc(env(safe-area-inset-bottom) + 12px);right:12px}
 #note{display:none;margin:10px 12px;padding:10px 12px;border-radius:10px;background:#2b2417;color:#e6c27a;font-size:13px;line-height:1.4}
 #vvid{display:none;max-width:100%;max-height:100%;background:#000}
 #vmsg{display:none;position:absolute;left:16px;right:16px;bottom:70px;z-index:3;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.75);color:#ddd;text-align:center;font-size:14px;line-height:1.4}
@@ -49,18 +53,37 @@ select{flex:0 0 auto;max-width:42%}
     <option value="top:month">Top month</option>
     <option value="top:all">Top all time</option>
   </select>
+  <div id="opts">
+    <label><input type="checkbox" id="ca"> Albums</label>
+    <label><input type="checkbox" id="ct" checked> Text-only posts</label>
+  </div>
 </header>
 <div id="note"></div>
 <main id="feed"></main>
 <div id="msg"></div>
 <div id="more"></div>
-<div id="viewer"><img id="vimg" alt=""><video id="vvid" controls playsinline loop></video><div id="vmsg"></div><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
+<div id="viewer"><img id="vimg" alt=""><video id="vvid" controls playsinline loop></video><div id="vmsg"></div><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vsave">Save</button><button id="vsaveall">Save all</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var feed = $('feed'), msg = $('msg'), more = $('more'), q = $('q'), sel = $('s');
   var state = { src: '', sort: 'hot' };
   var after = null, loading = false, done = false, gen = 0, mode = null;
+  var showAlbums = false, showText = true;
+  try {
+    var so = JSON.parse(localStorage.getItem('feed_opts') || 'null');
+    if (so) { showAlbums = !!so.albums; showText = so.text !== false; }
+  } catch (e) {}
+  $('ca').checked = showAlbums;
+  $('ct').checked = showText;
+  function optsChanged() {
+    showAlbums = $('ca').checked;
+    showText = $('ct').checked;
+    try { localStorage.setItem('feed_opts', JSON.stringify({ albums: showAlbums, text: showText })); } catch (e) {}
+    render();
+  }
+  $('ca').addEventListener('change', optsChanged);
+  $('ct').addEventListener('change', optsChanged);
 
   // ---------- talking to Reddit ----------
   // The app can download pages for us with the browser's login cookies (window.Android);
@@ -106,7 +129,9 @@ select{flex:0 0 auto;max-width:42%}
   function getText(path, kind) {
     var validate = kind === 'json'
       ? function (b) { return /^\s*[\[{]/.test(b || ''); }
-      : function (b) { return (b || '').indexOf('siteTable') >= 0; };
+      : kind === 'raw'
+        ? function (b) { return !!b && b.length > 500; }
+        : function (b) { return (b || '').indexOf('siteTable') >= 0; };
     var list = routes.filter(function (r) { return kind === 'json' || !r.www; });
     var pref = goodRoute[kind];
     if (pref) list.sort(function (a, b) { return (b.n === pref ? 1 : 0) - (a.n === pref ? 1 : 0); });
@@ -394,14 +419,19 @@ select{flex:0 0 auto;max-width:42%}
     a.href = 'https://old.reddit.com' + (d.permalink || '');
     c.appendChild(a);
     var info = pics(d);
+    c._isAlbum = info.total > 0 || !!info.album;
+    c._noMedia = !info.list.length && !info.vsrc.length && !c._isAlbum;
     info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i, a.href)); });
     if (!info.list.length && info.album) {                // album, but this view has no way to get its pictures
       var ab = document.createElement('div');
       ab.className = 'ph done';
       ab.style.minHeight = '140px';
-      tag(ab, 'ALBUM \u2013 tap to open');
-      ab.addEventListener('click', function () { location.href = a.href; });
+      tag(ab, 'ALBUM \u2013 tap to open, then \u2B07 to save');
+      var gm = /\/gallery\/([a-z0-9]+)/i.exec(d.url || '');
+      var gh = gm ? 'https://www.reddit.com/gallery/' + gm[1] : a.href;
+      ab.addEventListener('click', function () { location.href = gh; });
       c.appendChild(ab);
+      c._albumTile = ab; c._albumUrl = d.url; c._perma = a.href;
     }
     if (!info.list.length && info.vsrc.length) {          // video without a poster picture
       var vb = document.createElement('div');
@@ -420,6 +450,57 @@ select{flex:0 0 auto;max-width:42%}
       imgs[i].src = imgs[i].dataset.src;      // set after the card is in the page so lazy loading applies
       imgs[i].removeAttribute('data-src');
     }
+  }
+
+  // ---------- albums without the data route ----------
+  // We read the post's own web page (and the www gallery page as a second try), pick out the picture ids,
+  // and load the originals from i.redd.it. Our censoring still applies to every one of them.
+  function idsFrom(html) {
+    var re = /(?<![-\w])(?:preview|i)\.redd\.it\\?\/([a-z0-9]{10,16})\.(jpe?g|png|webp|gif)/gi;
+    var m, seen = {}, out = [];
+    while ((m = re.exec(html))) {
+      var id = m[1].toLowerCase();
+      if (!seen[id]) { seen[id] = 1; out.push({ u: 'https://i.redd.it/' + id + '.' + m[2].toLowerCase(), w: 0, h: 0 }); }
+    }
+    return out;
+  }
+  function albumImages(url, permalink) {
+    var attempts = [];
+    var path = (permalink || '').replace(/^https?:\/\/old\.reddit\.com/, '');
+    if (path) attempts.push(function () {
+      return getText(path, 'raw').then(function (r) {
+        var h = r.body, i = h.indexOf('id="siteTable"'), j = h.indexOf('class="commentarea"');
+        return idsFrom(i >= 0 ? h.slice(i, j > i ? j : i + 80000) : h);
+      });
+    });
+    var gm = /\/gallery\/([a-z0-9]+)/i.exec(url || '');
+    if (gm) attempts.push(function () {
+      return nativeGet('@www/gallery/' + gm[1]).then(function (r) {
+        var h = r.body, i = h.indexOf('gallery-carousel');
+        return idsFrom(i >= 0 ? h.slice(i, i + 60000) : h);
+      });
+    });
+    function next(k) {
+      if (k >= attempts.length) return Promise.resolve([]);
+      return attempts[k]().then(function (imgs) { return imgs.length ? imgs.slice(0, 10) : next(k + 1); },
+                                function () { return next(k + 1); });
+    }
+    return next(0);
+  }
+  var albumQueue = [], albumBusy = 0;
+  function pumpAlbums() {
+    while (albumBusy < 2 && albumQueue.length) runAlbum(albumQueue.shift());
+  }
+  function runAlbum(card) {
+    albumBusy++;
+    albumImages(card._albumUrl, card._perma).then(function (imgs) {
+      if (!imgs.length) { card._albumTile.firstChild.textContent = "ALBUM \u2013 tap to open, then \u2B07 to save"; return; }
+      var info = { list: imgs, total: imgs.length, video: false, vsrc: [], album: true };
+      var tile = card._albumTile;
+      imgs.forEach(function (p, i) { card.insertBefore(ph(p, info, i, card._perma), tile); });
+      card.removeChild(tile);
+      activate(card);
+    }).catch(function () {}).then(function () { albumBusy--; pumpAlbums(); });
   }
 
   function showError(text) {
@@ -448,8 +529,11 @@ select{flex:0 0 auto;max-width:42%}
       if (my !== gen) return;
       res.items.forEach(function (d) {
         var el = card(d);
+        if (el._isAlbum && !showAlbums) return;
+        if (el._noMedia && !showText) return;
         feed.appendChild(el);
         activate(el);
+        if (el._albumTile) { albumQueue.push(el); pumpAlbums(); }
       });
       after = res.after;
       if (!after) done = true;
@@ -492,6 +576,8 @@ select{flex:0 0 auto;max-width:42%}
     var my = ++vtoken;
     stopVideo();
     vimg.style.display = '';
+    $('vsave').style.display = '';
+    $('vsaveall').style.display = vlist.length > 1 ? '' : 'none';
     vimg.src = it.u;                          // the censored picture we already have: shows instantly
     vcount.textContent = vlist.length > 1 ? (i + 1) + ' / ' + vlist.length : '';
     vprev.style.display = vnext.style.display = vlist.length > 1 ? '' : 'none';
@@ -524,6 +610,7 @@ select{flex:0 0 auto;max-width:42%}
     vlist = [];
     vpost.href = post || '#';
     vimg.style.display = 'none';
+    $('vsave').style.display = $('vsaveall').style.display = 'none';
     vprev.style.display = vnext.style.display = 'none';
     vcount.textContent = '';
     vmsg.style.display = 'none';
@@ -557,6 +644,12 @@ select{flex:0 0 auto;max-width:42%}
   $('vclose').addEventListener('click', function () { closeViewer(false); });
   vimg.addEventListener('click', function () { closeViewer(false); });
   viewer.addEventListener('click', function (e) { if (e.target === viewer) closeViewer(false); });
+  function doSave(urls) {
+    if (window.Android && window.Android.save) window.Android.save(JSON.stringify(urls));
+  }
+  var vsave = $('vsave'), vsaveall = $('vsaveall');
+  vsave.addEventListener('click', function () { var it = vlist[vi]; if (it) doSave([it.full || it.u]); });
+  vsaveall.addEventListener('click', function () { doSave(vlist.map(function (x) { return x.full || x.u; })); });
   vprev.addEventListener('click', function () { showAt((vi + vlist.length - 1) % vlist.length); });
   vnext.addEventListener('click', function () { showAt((vi + 1) % vlist.length); });
 
