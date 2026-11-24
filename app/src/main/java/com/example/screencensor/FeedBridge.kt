@@ -12,8 +12,24 @@ import java.net.URL
  * Lets the feed page ask the app to download Reddit pages for it, using the browser's login cookies.
  * Only the feed page may use it, and only for old.reddit.com.
  */
-class FeedBridge(private val web: WebView, private val ua: String) {
+class FeedBridge(private val web: WebView, private val ua: String, private val onSave: (List<String>) -> Unit) {
     @Volatile var page: String = ""
+
+    /** The feed's full-screen viewer asks to save pictures to Photos. Only the feed page may do this. */
+    @JavascriptInterface
+    fun save(json: String) {
+        if (!page.startsWith("https://old.reddit.com/__feed")) return
+        val urls = ArrayList<String>()
+        try {
+            val a = org.json.JSONArray(json)
+            for (i in 0 until minOf(a.length(), 60)) {
+                val u = a.getString(i)
+                if (u.startsWith("https://")) urls.add(u)
+            }
+        } catch (_: Exception) {
+        }
+        if (urls.isNotEmpty()) onSave(urls)
+    }
 
     @JavascriptInterface
     fun fetch(id: Int, path: String) {

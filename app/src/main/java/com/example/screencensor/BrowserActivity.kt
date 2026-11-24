@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.SharedPreferences
 import android.widget.ScrollView
+import android.widget.Toast
+import org.json.JSONArray
+import org.json.JSONTokener
 import android.app.Activity
 import android.graphics.Bitmap
 import android.net.Uri
@@ -20,6 +23,7 @@ class BrowserActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var urlBox: EditText
     private lateinit var bridge: FeedBridge
+    private var ua: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(b: Bundle?) {
@@ -37,14 +41,14 @@ class BrowserActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, _, _ -> load(text.toString()); true }
         }
-        val go = Button(this).apply { text = "Go"; setOnClickListener { load(urlBox.text.toString()) } }
+        val saveBtn = Button(this).apply { text = "\u2B07"; setOnClickListener { collectAndSave() } }
         val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
         val gear = Button(this).apply { text = "\u2699"; setOnClickListener { openSettings(p) } }
         bar.addView(back)
         bar.addView(urlBox)
-        bar.addView(go)
         bar.addView(feedBtn)
         bar.addView(gear)
+        bar.addView(saveBtn)
 
         web = WebView(this)
         web.settings.javaScriptEnabled = true
@@ -52,9 +56,9 @@ class BrowserActivity : Activity() {
         web.settings.mediaPlaybackRequiresUserGesture = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         // look like a normal Chrome browser instead of an embedded WebView
-        val ua = web.settings.userAgentString.replace("; wv", "").replace(" Version/4.0", "")
+        ua = web.settings.userAgentString.replace("; wv", "").replace(" Version/4.0", "")
         web.settings.userAgentString = ua
-        bridge = FeedBridge(web, ua)
+        bridge = FeedBridge(web, ua) { urls -> runOnUiThread { confirmSave(urls) } }
         web.addJavascriptInterface(bridge, "Android")
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
@@ -96,6 +100,61 @@ class BrowserActivity : Activity() {
 
     companion object {
         const val FEED = "https://old.reddit.com/__feed"
+    }
+
+    /** Finds the pictures on the current page (the ones that have loaded) and offers to save them to Photos. */
+    private fun collectAndSave() {
+        val js = """(function () {
+  var seen = {}, out = [];
+  function add(u) {
+    if (!u || u.indexOf('http') !== 0) return;
+    var m = /^https?:\/\/(?:preview|i)\.redd\.it\/([a-z0-9]{10,16})\.(jpe?g|png|webp|gif)/i.exec(u);
+    var key = u, url = u;
+    if (m) { key = m[1].toLowerCase(); url = 'https://i.redd.it/' + key + '.' + m[2].toLowerCase(); }
+    else if (!/\.(jpe?g|png|webp|gif)(\?|${'$'})/i.test(u)) return;
+    if (!seen[key]) { seen[key] = 1; out.push(url); }
+  }
+  var imgs = document.images;
+  for (var i = 0; i < imgs.length; i++) {
+    var im = imgs[i];
+    if ((im.naturalWidth || 0) < 300 && (im.naturalHeight || 0) < 300) continue;
+    add(im.currentSrc || im.src);
+  }
+  return JSON.stringify(out.slice(0, 60));
+})()"""
+        web.evaluateJavascript(js) { res ->
+            val urls = ArrayList<String>()
+            try {
+                val inner = JSONTokener(res).nextValue()
+                if (inner is String) {
+                    val a = JSONArray(inner)
+                    for (i in 0 until a.length()) urls.add(a.getString(i))
+                }
+            } catch (_: Exception) {
+            }
+            if (urls.isEmpty()) {
+                Toast.makeText(this, "No pictures found on this page. Scroll down so they load, then try again.", Toast.LENGTH_LONG).show()
+            } else confirmSave(urls)
+        }
+    }
+
+    private fun confirmSave(urls: List<String>) {
+        val p = getSharedPreferences("cfg", MODE_PRIVATE)
+        AlertDialog.Builder(this)
+            .setTitle("Save ${urls.size} picture${if (urls.size == 1) "" else "s"} to Photos?")
+            .setMessage("They are censored with your current settings first, and saved in Pictures/ScreenCensor.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                Toast.makeText(this, "Saving...", Toast.LENGTH_SHORT).show()
+                val app = applicationContext
+                Thread {
+                    val ok = PhotoSaver.save(app, urls, ua, p)
+                    runOnUiThread {
+                        Toast.makeText(this, "Saved $ok of ${urls.size} to Photos (Pictures/ScreenCensor)", Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            }
+            .show()
     }
 
     private fun sig(p: SharedPreferences) = p.all.filterKeys { it != "home" }.toString()

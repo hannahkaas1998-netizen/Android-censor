@@ -63,16 +63,22 @@ object ImageProxy {
     }
 
     private fun image(ctx: Context, url: String, headers: Map<String, String>, p: SharedPreferences): WebResourceResponse {
+        val (m, b) = processed(ctx, url, headers, p)
+        return respond(m, b)
+    }
+
+    /** The picture as it should be shown or saved: downloaded, censored per the settings, cached. */
+    fun processed(ctx: Context, url: String, headers: Map<String, String>, p: SharedPreferences): Pair<String, ByteArray> {
         val key = url + "|" + p.all.filterKeys { it != "home" }.toString().hashCode()
-        cache.get(key)?.let { return respond(it.mime, it.bytes) }
+        cache.get(key)?.let { return Pair(it.mime, it.bytes) }
         sem.acquire()
         try {
-            cache.get(key)?.let { return respond(it.mime, it.bytes) }
+            cache.get(key)?.let { return Pair(it.mime, it.bytes) }
             val (mime, raw) = fetch(url, headers)
             var outMime = mime
             var outBytes = raw
             if (mime.startsWith("image/") && !mime.contains("svg")) {
-                val bmp = decode(raw) ?: return placeholder()            // can't read it -> don't show it
+                val bmp = decode(raw) ?: throw IOException("can't read this picture")   // never show what we can't check
                 if (bmp.width >= 96 && bmp.height >= 96) {
                     val res = ImageCensor.process(getEngine(ctx), bmp, p)
                     if (res != null) {
@@ -82,7 +88,7 @@ object ImageProxy {
                 }
             }
             cache.put(key, Cached(outMime, outBytes))
-            return respond(outMime, outBytes)
+            return Pair(outMime, outBytes)
         } finally {
             sem.release()
         }
