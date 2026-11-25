@@ -69,7 +69,12 @@ object ImageCensor {
 
     private fun focusBoxes(e: Engine, work: Bitmap, p: SharedPreferences): List<RectF> {
         if ((p.getString("focustarget", "heels") ?: "heels") == "male") {
-            return e.nude.detect(work, 0.25f).filter { it.label == 14 }.map { RectF(it.box) }
+            // Prefer confident detections, but retry at a lower threshold if none
+            // were found. This affects focus only; normal censor sensitivity is unchanged.
+            val confident = e.nude.detect(work, 0.25f).filter { it.label == 14 }
+            val matches = if (confident.isNotEmpty()) confident
+                          else e.nude.detect(work, 0.12f).filter { it.label == 14 }
+            return matches.map { RectF(it.box) }
         }
         val hd = e.heels ?: return emptyList()
         val more = p.getBoolean("heelmore", true)
