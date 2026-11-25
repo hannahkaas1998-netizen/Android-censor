@@ -1,6 +1,11 @@
 # Screen Censor (Android)
 
-Covers nudity / cleavage / faces / feet on screen with mosaic, blur or solid boxes.
+Covers nudity / cleavage / faces / feet on screen with mosaic, blur or solid boxes, or edits the picture instead:
+
+- **Mosaic**: fixed pixel grid over the whole picture (block size depends on the picture, set with *Pixel size*), cells snap to the grid and follow the shape of the covered body part.
+- **Mannequin**: skin becomes white glossy plastic, with the original lighting so proportions are kept. Optional blank face.
+- **Remove nudity**: nipples are painted over with plain skin, genitals/anus are smoothed out.
+- **Focus** (safe browser): zoom in on / isolate high heels, male genitals, or both.
 
 ## Build the APK (no PC needed)
 1. Put this whole folder in a new GitHub repo (keep the folder structure, including `.github/workflows/build.yml`).

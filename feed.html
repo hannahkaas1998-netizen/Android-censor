@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Feed</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#0e0e10;color:#f2f2f2;font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;background:#16161a;border-bottom:1px solid #26262c}
+input,select{font:inherit;color:#f2f2f2;background:#232329;border:1px solid #33333b;border-radius:10px;padding:10px 12px;outline:none}
+input{flex:1;min-width:0}
+select{flex:0 0 auto;max-width:42%}
+.card{margin:16px 0 26px}
+.title{display:block;padding:0 14px 9px;font-weight:650;font-size:17px;line-height:1.3;color:#fff;text-decoration:none;overflow-wrap:anywhere}
+.ph{position:relative;margin:0 8px 8px;border-radius:12px;overflow:hidden;background:#1b1b20;max-height:82vh}
+.ph:not(.done){background:linear-gradient(110deg,#1b1b20 30%,#25252c 50%,#1b1b20 70%);background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.ph img{display:block;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .25s}
+.ph img.ok{opacity:1}
+.ph.err{min-height:90px}
+.tag{position:absolute;right:8px;bottom:8px;padding:3px 9px;border-radius:8px;background:rgba(0,0,0,.65);font-size:12px;letter-spacing:.3px}
+#msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
+#msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
+#more{height:1px}
+#opts{flex-basis:100%;display:flex;gap:20px;padding:0 2px;font-size:14px;color:#c8c8d0}
+#opts label{display:flex;align-items:center;gap:6px}
+#vsave{bottom:calc(env(safe-area-inset-bottom) + 12px);left:12px}
+#vsaveall{bottom:calc(env(safe-area-inset-bottom) + 12px);right:12px}
+#note{display:none;margin:10px 12px;padding:10px 12px;border-radius:10px;background:#2b2417;color:#e6c27a;font-size:13px;line-height:1.4}
+#vvid{display:none;max-width:100%;max-height:100%;background:#000}
+#vmsg{display:none;position:absolute;left:16px;right:16px;bottom:70px;z-index:3;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.75);color:#ddd;text-align:center;font-size:14px;line-height:1.4}
+.ph{cursor:pointer}
+#viewer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:none;align-items:center;justify-content:center;background:#000}
+#viewer img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+#viewer button,#viewer a{position:absolute;z-index:2;background:rgba(30,30,34,.85);color:#fff;border:0;border-radius:22px;padding:10px 16px;font:inherit;text-decoration:none}
+#vclose{top:calc(env(safe-area-inset-top) + 10px);right:12px}
+#vpost{top:calc(env(safe-area-inset-top) + 10px);left:12px}
+#vprev{left:10px;top:50%}
+#vnext{right:10px;top:50%}
+#vcount{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:0;right:0;text-align:center;color:#ddd;font-size:14px;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <input id="q" type="search" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="go" placeholder="r/pics, u/name, or blank for front page">
+  <select id="s">
+    <option value="hot">Hot</option>
+    <option value="new">New</option>
+    <option value="top:day">Top today</option>
+    <option value="top:week">Top week</option>
+    <option value="top:month">Top month</option>
+    <option value="top:all">Top all time</option>
+  </select>
+  <div id="opts">
+    <label><input type="checkbox" id="ca"> Albums</label>
+    <label><input type="checkbox" id="ct" checked> Text-only posts</label>
+  </div>
+</header>
+<div id="note"></div>
+<main id="feed"></main>
+<div id="msg"></div>
+<div id="more"></div>
+<div id="viewer"><img id="vimg" alt=""><video id="vvid" controls playsinline loop></video><div id="vmsg"></div><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vsave">Save</button><button id="vsaveall">Save all</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var feed = $('feed'), msg = $('msg'), more = $('more'), q = $('q'), sel = $('s');
+  var state = { src: '', sort: 'hot' };
+  var after = null, loading = false, done = false, gen = 0, mode = null;
+  var showAlbums = false, showText = true;
+  try {
+    var so = JSON.parse(localStorage.getItem('feed_opts') || 'null');
+    if (so) { showAlbums = !!so.albums; showText = so.text !== false; }
+  } catch (e) {}
+  $('ca').checked = showAlbums;
+  $('ct').checked = showText;
+  function optsChanged() {
+    showAlbums = $('ca').checked;
+    showText = $('ct').checked;
+    try { localStorage.setItem('feed_opts', JSON.stringify({ albums: showAlbums, text: showText })); } catch (e) {}
+    render();
+  }
+  $('ca').addEventListener('change', optsChanged);
+  $('ct').addEventListener('change', optsChanged);
+
+  // ---------- talking to Reddit ----------
+  // The app can download pages for us with the browser's login cookies (window.Android);
+  // if that isn't there we fall back to the page's own fetch().
+  var nativeCbs = {}, nid = 0;
+  window.__nativeCb = function (id, status, body) {
+    var cb = nativeCbs[id];
+    if (cb) { delete nativeCbs[id]; cb(status, body); }
+  };
+  function nativeGet(path) {
+    return new Promise(function (res, rej) {
+      if (!window.Android || !window.Android.fetch) return rej(new Error('no bridge'));
+      var id = ++nid;
+      nativeCbs[id] = function (status, body) {
+        if (status === -1) rej(new Error(body || 'network error')); else res({ status: status, body: body });
+      };
+      try { window.Android.fetch(id, path); } catch (e) { delete nativeCbs[id]; rej(e); return; }
+      setTimeout(function () {
+        if (nativeCbs[id]) { delete nativeCbs[id]; rej(new Error('timed out')); }
+      }, 25000);
+    });
+  }
+  function pageGet(path) {
+    return fetch(path, { credentials: 'include' }).then(function (r) {
+      return r.text().then(function (t) { return { status: r.status, body: t }; });
+    });
+  }
+  function okR(r) { return r && r.status >= 200 && r.status < 300; }
+  function pageTitle(b) {
+    var m = /<title[^>]*>([^<]{0,70})/i.exec(b || '');
+    return m ? m[1].trim() : '';
+  }
+  // Every way we have of asking Reddit. The first answer that is really data (or a real listing page) wins.
+  var routes = [
+    { n: 'app',     f: function (p) { return nativeGet(p); } },
+    { n: 'page',    f: function (p) { return pageGet(p); } },
+    { n: 'app-api', f: function (p) { return nativeGet('@api' + p); } },
+    { n: 'www',     f: function (p) { return nativeGet('@www' + p); }, www: true },
+    { n: 'www-api', f: function (p) { return nativeGet('@www@api' + p); }, www: true }
+  ];
+  var goodRoute = { json: null, html: null };
+  var trace = [];
+  function getText(path, kind) {
+    var validate = kind === 'json'
+      ? function (b) { return /^\s*[\[{]/.test(b || ''); }
+      : kind === 'raw'
+        ? function (b) { return !!b && b.length > 500; }
+        : function (b) { return (b || '').indexOf('siteTable') >= 0; };
+    var list = routes.filter(function (r) { return kind === 'json' || !r.www; });
+    var pref = goodRoute[kind];
+    if (pref) list.sort(function (a, b) { return (b.n === pref ? 1 : 0) - (a.n === pref ? 1 : 0); });
+    var first = null, firstErr = null;
+    function next(i) {
+      if (i >= list.length) return first ? Promise.resolve(first) : Promise.reject(firstErr || new Error('failed'));
+      var r = list[i];
+      return r.f(path).then(function (res) {
+        if (okR(res) && validate(res.body)) { goodRoute[kind] = r.n; return res; }
+        var t = pageTitle(res.body);
+        trace.push(r.n + ': ' + (okR(res) ? 'not ' + kind + (t ? ' (' + t + ')' : '') : 'HTTP ' + res.status));
+        if (!first) first = res;
+        return next(i + 1);
+      }, function (e) {
+        trace.push(r.n + ': ' + (e && e.message ? e.message : 'error'));
+        if (!firstErr) firstErr = e;
+        return next(i + 1);
+      });
+    }
+    return next(0);
+  }
+
+  function HttpErr(status, body) {
+    var e = new Error('HTTP ' + status);
+    e.status = status;
+    e.body = body || '';
+    return e;
+  }
+  function friendly(e) {
+    var s = e.status, reason = '';
+    try { reason = (JSON.parse(e.body) || {}).reason || ''; } catch (x) {}
+    if (s === 403 && reason === 'gated')
+      return "This community is 18+ and your account isn't set to show adult content. On old.reddit.com open Preferences and tick \u201cI am over eighteen and willing to view adult content\u201d, then retry.";
+    if (s === 401 || s === 403) return 'Reddit refused the request (HTTP ' + s + '). Check that you are logged in.';
+    if (s === 429) return 'Reddit says slow down (HTTP 429). Wait a minute, then retry.';
+    if (s === 404) return "That community or user wasn't found.";
+    return e.message || 'Unknown error';
+  }
+
+  function normSrc(v) {
+    v = (v || '').trim().replace(/^https?:\/\/(old\.|www\.)?reddit\.com/i, '').replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!v || /^(front|home)$/i.test(v)) return '';
+    if (/^(r|u|user)\//i.test(v)) {
+      var parts = v.split('/').slice(0, 2);
+      if (/^u$/i.test(parts[0])) parts[0] = 'user';
+      return parts.join('/');
+    }
+    if (/^[\w+]+$/.test(v)) return 'r/' + v;
+    return '';
+  }
+
+  function readHash() {
+    var raw = location.hash.slice(1);
+    if (raw) {
+      var i = raw.lastIndexOf('|');
+      try {
+        state.src = decodeURIComponent(i < 0 ? raw : raw.slice(0, i));
+        state.sort = (i < 0 ? '' : raw.slice(i + 1)) || 'hot';
+      } catch (e) {}
+    } else {
+      try {
+        var l = JSON.parse(localStorage.getItem('feed_last') || 'null');
+        if (l) { state.src = l.src || ''; state.sort = l.sort || 'hot'; }
+      } catch (e) {}
+    }
+    q.value = state.src;
+    sel.value = state.sort;
+    if (sel.value !== state.sort) { state.sort = 'hot'; sel.value = 'hot'; }
+  }
+
+  function go() {
+    state.src = normSrc(q.value);
+    state.sort = sel.value;
+    var target = '#' + encodeURIComponent(state.src) + '|' + state.sort;
+    var same = location.hash === target;
+    location.hash = target;
+    if (same) render();
+  }
+
+  function listURL() {
+    var p = state.sort.split(':'), s = p[0], t = p[1];
+    var isUser = /^user\//i.test(state.src);
+    var base;
+    if (!state.src) base = '/' + s + '.json';
+    else if (isUser) base = '/' + state.src + '/submitted.json';
+    else base = '/' + state.src + '/' + s + '.json';
+    var params = ['raw_json=1', 'limit=25'];
+    if (isUser) params.push('sort=' + s);
+    if (t) params.push('t=' + t);
+    if (after) params.push('after=' + encodeURIComponent(after));
+    return base + '?' + params.join('&');
+  }
+
+  function htmlURL() {
+    var p = state.sort.split(':'), s = p[0], t = p[1];
+    var isUser = /^user\//i.test(state.src);
+    var base;
+    if (!state.src) base = (s === 'hot') ? '/' : '/' + s + '/';
+    else if (isUser) base = '/' + state.src + '/submitted/';
+    else base = '/' + state.src + '/' + (s === 'hot' ? '' : s + '/');
+    var params = [];
+    if (isUser) params.push('sort=' + s);
+    if (t) params.push('t=' + t);
+    if (after) { params.push('count=' + feed.children.length); params.push('after=' + encodeURIComponent(after)); }
+    return base + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function getJson() {
+    return getText(listURL(), 'json').then(function (r) {
+      if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
+      var j;
+      try { j = JSON.parse(r.body); } catch (x) { throw new Error('Reddit sent a web page instead of data'); }
+      var ch = (j && j.data && j.data.children) || [];
+      return {
+        items: ch.filter(function (c) { return c.kind === 't3' && c.data && !c.data.stickied; })
+                 .map(function (c) { return c.data; }),
+        after: j.data ? j.data.after : null
+      };
+    });
+  }
+
+  // Backup route: read the normal old.reddit page (the one you can see when browsing the site)
+  function parseHtml(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var items = [];
+    var things = doc.querySelectorAll('#siteTable .thing.link');
+    for (var i = 0; i < things.length; i++) {
+      var el = things[i];
+      if (el.classList.contains('promoted') || el.classList.contains('stickied') ||
+          el.getAttribute('data-promoted') === 'true') continue;
+      var a = el.querySelector('a.title');
+      if (!a) continue;
+      var u = el.getAttribute('data-url') || '';
+      var vm = /v\.redd\.it\/([A-Za-z0-9]+)/.exec(u);
+      var it = {
+        title: a.textContent,
+        permalink: el.getAttribute('data-permalink') || '',
+        url: u,
+        is_video: !!vm,
+        _album: /\/gallery\//.test(u)
+      };
+      if (vm) it._vsrc = [
+        'https://v.redd.it/' + vm[1] + '/HLSPlaylist.m3u8',
+        'https://v.redd.it/' + vm[1] + '/DASH_720.mp4',
+        'https://v.redd.it/' + vm[1] + '/DASH_480.mp4',
+        'https://v.redd.it/' + vm[1] + '/DASH_360.mp4'
+      ];
+      items.push(it);
+    }
+    var next = doc.querySelector('.next-button a');
+    var nextAfter = null;
+    if (next) {
+      var m = /[?&]after=([^&]+)/.exec(next.getAttribute('href') || '');
+      if (m) nextAfter = decodeURIComponent(m[1]);
+    }
+    return { items: items, after: nextAfter };
+  }
+
+  function getHtml() {
+    return getText(htmlURL(), 'html').then(function (r) {
+      if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
+      var res = parseHtml(r.body);
+      if (!res.items.length) throw new Error('no posts found on the page (age check or login page?)');
+      return res;
+    });
+  }
+
+  function fetchPage() {
+    if (!mode) trace.length = 0;
+    if (mode === 'html') return getHtml();
+    if (mode === 'json') return getJson();
+    return getJson().then(function (r) { mode = 'json'; return r; }, function (e1) {
+      var jt = trace.join(' | ');
+      return getHtml().then(function (r) {
+        mode = 'html';
+        var n = $('note');
+        n.textContent = 'Limited view: Reddit blocked the data route (' + friendly(e1) + '), so albums and videos can\'t be shown here.  [' + jt + ']';
+        n.style.display = 'block';
+        return r;
+      }, function (e2) {
+        throw new Error(friendly(e1) + '  [page view: ' + e2.message + ']');
+      });
+    });
+  }
+
+  // ---------- drawing ----------
+  function best(arr, src) {
+    var pick = null;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].u && arr[i].w <= 1080 && (!pick || arr[i].w > pick.w)) pick = arr[i];
+    }
+    return pick || src;
+  }
+
+  function videoSrcs(d) {
+    if (d._vsrc) return d._vsrc;
+    var out = [];
+    try {
+      var m = (d.secure_media && d.secure_media.reddit_video) || (d.media && d.media.reddit_video);
+      if (m) { if (m.hls_url) out.push(m.hls_url); if (m.fallback_url) out.push(m.fallback_url); }
+      var rp = d.preview && d.preview.reddit_video_preview;
+      if (rp && rp.fallback_url) out.push(rp.fallback_url);
+      var v = d.preview && d.preview.images && d.preview.images[0] && d.preview.images[0].variants;
+      if (v && v.mp4 && v.mp4.source && v.mp4.source.url) out.push(v.mp4.source.url);
+    } catch (e) {}
+    return out;
+  }
+
+  function pics(d) {
+    // a crosspost carries its pictures in the original post
+    if (d.crosspost_parent_list && d.crosspost_parent_list.length && !d.preview && !d.is_gallery) {
+      var o = d.crosspost_parent_list[0], c = {};
+      for (var k in o) c[k] = o[k];
+      c.title = d.title; c.permalink = d.permalink;
+      d = c;
+    }
+    var out = [], total = 0;
+    var vsrc = videoSrcs(d);
+    var video = !!d.is_video || /video/.test(d.post_hint || '') || vsrc.length > 0;
+    try {
+      if (d.is_gallery && d.media_metadata) {
+        var items = (d.gallery_data && d.gallery_data.items) || [];
+        total = items.length;
+        items.slice(0, 6).forEach(function (it) {
+          var m = d.media_metadata[it.media_id];
+          if (!m || m.status !== 'valid' || !m.s) return;
+          var arr = (m.p || []).map(function (x) { return { u: x.u, w: x.x, h: x.y }; });
+          var src = { u: m.s.u || m.s.gif, w: m.s.x, h: m.s.y };
+          var b = best(arr, src);
+          if (b && b.u) out.push({ u: b.u, w: b.w, h: b.h, full: src.u });
+        });
+      } else if (d.preview && d.preview.images && d.preview.images[0]) {
+        var im = d.preview.images[0];
+        var arr2 = (im.resolutions || []).map(function (x) { return { u: x.url, w: x.width, h: x.height }; });
+        var b2 = best(arr2, { u: im.source.url, w: im.source.width, h: im.source.height });
+        if (b2 && b2.u) out.push({ u: b2.u, w: b2.w, h: b2.h, full: im.source.url });
+      } else if (/^https?:\/\/[^ ]+\.(jpe?g|png|webp|gif)(\?|$)/i.test(d.url || '')) {
+        out.push({ u: d.url, w: 0, h: 0, full: d.url });
+      }
+    } catch (e) {}
+    return { list: out, total: total, video: video, vsrc: vsrc, album: !!d._album };
+  }
+
+  function tag(box, text) {
+    var t = document.createElement('span');
+    t.className = 'tag';
+    t.textContent = text;
+    box.appendChild(t);
+  }
+
+  function ph(p, info, i, perma) {
+    var box = document.createElement('div');
+    box.className = 'ph';
+    if (p.w && p.h) box.style.aspectRatio = p.w + ' / ' + p.h; else box.style.minHeight = '220px';
+    var im = document.createElement('img');
+    im.alt = '';
+    im.decoding = 'async';
+    im.loading = 'lazy';
+    im.dataset.src = p.u;
+    im.onload = function () {
+      im.className = 'ok';
+      box.classList.add('done');
+      // follow the real shape of the (possibly zoomed or cropped) picture
+      box.style.aspectRatio = im.naturalWidth + ' / ' + im.naturalHeight;
+      box.style.minHeight = '0';
+    };
+    im.onerror = function () { box.classList.add('err'); };
+    box.appendChild(im);
+    box.addEventListener('click', function () {
+      if (info.video && info.vsrc.length) openVideo(info.vsrc, p.u, perma);
+      else if (info.video) location.href = perma;
+      else if (im.classList.contains('ok')) openViewer(info.list, i, perma);
+    });
+    if (info.video && i === 0) tag(box, 'VIDEO');
+    else if (info.total > 1) tag(box, (i + 1) + '/' + info.total);
+    return box;
+  }
+
+  function card(d) {
+    var c = document.createElement('article');
+    c.className = 'card';
+    var a = document.createElement('a');
+    a.className = 'title';
+    a.textContent = d.title || '';
+    a.href = 'https://old.reddit.com' + (d.permalink || '');
+    c.appendChild(a);
+    var info = pics(d);
+    c._isAlbum = info.total > 0 || !!info.album;
+    c._noMedia = !info.list.length && !info.vsrc.length && !c._isAlbum;
+    info.list.forEach(function (p, i) { c.appendChild(ph(p, info, i, a.href)); });
+    if (!info.list.length && info.album) {                // album, but this view has no way to get its pictures
+      var ab = document.createElement('div');
+      ab.className = 'ph done';
+      ab.style.minHeight = '140px';
+      tag(ab, 'ALBUM \u2013 tap to open, then \u2B07 to save');
+      var gm = /\/gallery\/([a-z0-9]+)/i.exec(d.url || '');
+      var gh = gm ? 'https://www.reddit.com/gallery/' + gm[1] : a.href;
+      ab.addEventListener('click', function () { location.href = gh; });
+      c.appendChild(ab);
+      c._albumTile = ab; c._albumUrl = d.url; c._perma = a.href;
+    }
+    if (!info.list.length && info.vsrc.length) {          // video without a poster picture
+      var vb = document.createElement('div');
+      vb.className = 'ph done';
+      vb.style.minHeight = '140px';
+      tag(vb, 'VIDEO \u25B6');
+      vb.addEventListener('click', function () { openVideo(info.vsrc, '', a.href); });
+      c.appendChild(vb);
+    }
+    return c;
+  }
+
+  function activate(c) {
+    var imgs = c.querySelectorAll('img[data-src]');
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].src = imgs[i].dataset.src;      // set after the card is in the page so lazy loading applies
+      imgs[i].removeAttribute('data-src');
+    }
+  }
+
+  // ---------- albums without the data route ----------
+  // We read the post's own web page (and the www gallery page as a second try), pick out the picture ids,
+  // and load the originals from i.redd.it. Our censoring still applies to every one of them.
+  function idsFrom(html) {
+    var re = /(?<![-\w])(?:preview|i)\.redd\.it\\?\/([a-z0-9]{10,16})\.(jpe?g|png|webp|gif)/gi;
+    var m, seen = {}, out = [];
+    while ((m = re.exec(html))) {
+      var id = m[1].toLowerCase();
+      if (!seen[id]) { seen[id] = 1; out.push({ u: 'https://i.redd.it/' + id + '.' + m[2].toLowerCase(), w: 0, h: 0 }); }
+    }
+    return out;
+  }
+  function albumImages(url, permalink) {
+    var attempts = [];
+    var path = (permalink || '').replace(/^https?:\/\/old\.reddit\.com/, '');
+    if (path) attempts.push(function () {
+      return getText(path, 'raw').then(function (r) {
+        var h = r.body, i = h.indexOf('id="siteTable"'), j = h.indexOf('class="commentarea"');
+        return idsFrom(i >= 0 ? h.slice(i, j > i ? j : i + 80000) : h);
+      });
+    });
+    var gm = /\/gallery\/([a-z0-9]+)/i.exec(url || '');
+    if (gm) attempts.push(function () {
+      return nativeGet('@www/gallery/' + gm[1]).then(function (r) {
+        var h = r.body, i = h.indexOf('gallery-carousel');
+        return idsFrom(i >= 0 ? h.slice(i, i + 60000) : h);
+      });
+    });
+    function next(k) {
+      if (k >= attempts.length) return Promise.resolve([]);
+      return attempts[k]().then(function (imgs) { return imgs.length ? imgs.slice(0, 10) : next(k + 1); },
+                                function () { return next(k + 1); });
+    }
+    return next(0);
+  }
+  var albumQueue = [], albumBusy = 0;
+  function pumpAlbums() {
+    while (albumBusy < 2 && albumQueue.length) runAlbum(albumQueue.shift());
+  }
+  function runAlbum(card) {
+    albumBusy++;
+    albumImages(card._albumUrl, card._perma).then(function (imgs) {
+      if (!imgs.length) { card._albumTile.firstChild.textContent = "ALBUM \u2013 tap to open, then \u2B07 to save"; return; }
+      var info = { list: imgs, total: imgs.length, video: false, vsrc: [], album: true };
+      var tile = card._albumTile;
+      imgs.forEach(function (p, i) { card.insertBefore(ph(p, info, i, card._perma), tile); });
+      card.removeChild(tile);
+      activate(card);
+    }).catch(function () {}).then(function () { albumBusy--; pumpAlbums(); });
+  }
+
+  function showError(text) {
+    msg.textContent = '';
+    var p = document.createElement('div');
+    p.textContent = text;
+    msg.appendChild(p);
+    var links = document.createElement('div');
+    links.style.marginTop = '10px';
+    [['Retry', null], ['Log in', 'https://old.reddit.com/login'], ['Preferences', 'https://old.reddit.com/prefs/']].forEach(function (l) {
+      var a = document.createElement('a');
+      a.textContent = l[0];
+      a.href = l[1] || '#';
+      if (!l[1]) a.addEventListener('click', function (e) { e.preventDefault(); load(); });
+      links.appendChild(a);
+    });
+    msg.appendChild(links);
+  }
+
+  function load() {
+    if (loading || done) return;
+    loading = true;
+    var my = gen;
+    msg.textContent = 'Loading...';
+    fetchPage().then(function (res) {
+      if (my !== gen) return;
+      res.items.forEach(function (d) {
+        var el = card(d);
+        if (el._isAlbum && !showAlbums) return;
+        if (el._noMedia && !showText) return;
+        feed.appendChild(el);
+        activate(el);
+        if (el._albumTile) { albumQueue.push(el); pumpAlbums(); }
+      });
+      after = res.after;
+      if (!after) done = true;
+      msg.textContent = (done && !feed.children.length) ? 'Nothing here.' : '';
+      loading = false;
+      check();
+    }).catch(function (e) {
+      if (my !== gen) return;
+      loading = false;
+      showError(e.message || String(e));
+    });
+  }
+
+  function check() {
+    var r = more.getBoundingClientRect();
+    if (!loading && !done && r.top < window.innerHeight * 2) load();
+  }
+
+  function render() {
+    gen++;
+    after = null; done = false; loading = false; mode = null;
+    feed.innerHTML = '';
+    msg.textContent = '';
+    $('note').style.display = 'none';
+    window.scrollTo(0, 0);
+    try { localStorage.setItem('feed_last', JSON.stringify(state)); } catch (e) {}
+    document.title = state.src || 'front page';
+    load();
+  }
+
+  // ---------- full screen viewer ----------
+  var viewer = $('viewer'), vimg = $('vimg'), vcount = $('vcount'), vpost = $('vpost');
+  var vprev = $('vprev'), vnext = $('vnext'), vvid = $('vvid'), vmsg = $('vmsg');
+  var vsrcs = [], vsi = 0;
+  var vlist = [], vi = 0, vopen = false, vtoken = 0;
+
+  function showAt(i) {
+    vi = i;
+    var it = vlist[i];
+    var my = ++vtoken;
+    stopVideo();
+    vimg.style.display = '';
+    $('vsave').style.display = '';
+    $('vsaveall').style.display = vlist.length > 1 ? '' : 'none';
+    vimg.src = it.u;                          // the censored picture we already have: shows instantly
+    vcount.textContent = vlist.length > 1 ? (i + 1) + ' / ' + vlist.length : '';
+    vprev.style.display = vnext.style.display = vlist.length > 1 ? '' : 'none';
+    if (it.full && it.full !== it.u) {        // then swap in the full size one (also censored by the app)
+      var big = new Image();
+      big.onload = function () { if (my === vtoken) vimg.src = it.full; };
+      big.src = it.full;
+    }
+  }
+  function stopVideo() {
+    vsrcs = []; vsi = 0;
+    try { vvid.pause(); vvid.removeAttribute('src'); vvid.load(); } catch (e) {}
+    vvid.style.display = 'none';
+    vmsg.style.display = 'none';
+  }
+  function playNext() {
+    if (vsi >= vsrcs.length) {
+      if (!vsrcs.length) return;
+      vmsg.textContent = "Couldn't play this video. Videos can't be censored, so they are blocked by default. To watch them uncensored, untick \u201cBlock videos\u201d in the \u2699 menu at the top of the browser.";
+      vmsg.style.display = 'block';
+      return;
+    }
+    vvid.src = vsrcs[vsi++];
+    var pr = vvid.play();
+    if (pr && pr.catch) pr.catch(function () {});
+  }
+  vvid.addEventListener('error', playNext);
+  function openVideo(srcs, poster, post) {
+    vtoken++;
+    vlist = [];
+    vpost.href = post || '#';
+    vimg.style.display = 'none';
+    $('vsave').style.display = $('vsaveall').style.display = 'none';
+    vprev.style.display = vnext.style.display = 'none';
+    vcount.textContent = '';
+    vmsg.style.display = 'none';
+    vvid.poster = poster || '';
+    vvid.style.display = 'block';
+    vsrcs = srcs; vsi = 0;
+    viewer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    if (!vopen) { vopen = true; history.pushState({ v: 1 }, ''); }
+    playNext();
+  }
+  function openViewer(list, i, post) {
+    vlist = list;
+    vpost.href = post || '#';
+    showAt(i);
+    viewer.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    if (!vopen) { vopen = true; history.pushState({ v: 1 }, ''); }   // so the phone's back button closes it
+  }
+  function closeViewer(fromPop) {
+    if (!vopen) return;
+    vopen = false;
+    vtoken++;
+    viewer.style.display = 'none';
+    stopVideo();
+    vimg.removeAttribute('src');
+    document.body.style.overflow = '';
+    if (!fromPop) history.back();
+  }
+  window.addEventListener('popstate', function () { if (vopen) closeViewer(true); });
+  $('vclose').addEventListener('click', function () { closeViewer(false); });
+  vimg.addEventListener('click', function () { closeViewer(false); });
+  viewer.addEventListener('click', function (e) { if (e.target === viewer) closeViewer(false); });
+  function doSave(urls) {
+    if (window.Android && window.Android.save) window.Android.save(JSON.stringify(urls));
+  }
+  var vsave = $('vsave'), vsaveall = $('vsaveall');
+  vsave.addEventListener('click', function () { var it = vlist[vi]; if (it) doSave([it.full || it.u]); });
+  vsaveall.addEventListener('click', function () { doSave(vlist.map(function (x) { return x.full || x.u; })); });
+  vprev.addEventListener('click', function () { showAt((vi + vlist.length - 1) % vlist.length); });
+  vnext.addEventListener('click', function () { showAt((vi + 1) % vlist.length); });
+
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); q.blur(); go(); }
+  });
+  sel.addEventListener('change', go);
+  window.addEventListener('scroll', check, { passive: true });
+  window.addEventListener('resize', check);
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>
