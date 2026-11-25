@@ -78,7 +78,9 @@ object ImageProxy {
             var outMime = mime
             var outBytes = raw
             if (mime.startsWith("image/") && !mime.contains("svg")) {
-                val bmp = decode(raw) ?: throw IOException("can't read this picture")   // never show what we can't check
+                val st = p.getString("style", "mosaic")
+                val cap = if (st == "mannequin" || st == "smooth") 1600 else 2400    // the heavy effects need more memory
+                val bmp = decode(raw, cap) ?: throw IOException("can't read this picture")   // never show what we can't check
                 if (bmp.width >= 96 && bmp.height >= 96) {
                     val res = ImageCensor.process(getEngine(ctx), bmp, p)
                     if (res != null) {
@@ -121,13 +123,13 @@ object ImageProxy {
         return Pair(mime, bos.toByteArray())
     }
 
-    private fun decode(raw: ByteArray): Bitmap? {
+    private fun decode(raw: ByteArray, cap: Int): Bitmap? {
         val o = BitmapFactory.Options()
         o.inJustDecodeBounds = true
         BitmapFactory.decodeByteArray(raw, 0, raw.size, o)
         if (o.outWidth <= 0) return null
         var s = 1
-        while (maxOf(o.outWidth, o.outHeight) / s > 2400) s *= 2
+        while (maxOf(o.outWidth, o.outHeight) / s > cap) s *= 2
         val o2 = BitmapFactory.Options()
         o2.inSampleSize = s
         return BitmapFactory.decodeByteArray(raw, 0, raw.size, o2)

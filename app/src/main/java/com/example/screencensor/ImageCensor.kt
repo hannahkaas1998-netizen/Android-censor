@@ -6,7 +6,7 @@ import android.graphics.*
 import kotlin.math.max
 import kotlin.math.min
 
-/** Edits the actual picture: censors it, or focuses it on high heels / male genitals. Used by the safe browser. */
+/** Edits the actual picture: censors it, or focuses it on one thing. Used by the safe browser. */
 object ImageCensor {
     class Engine(ctx: Context) {
         val nude = Detector(ctx)
@@ -18,7 +18,7 @@ object ImageCensor {
     private val NUDE_F = setOf(2, 3, 4, 6)
     private val BUTT = setOf(2, 17)
     private val MALE = setOf(14)
-    private val ROUND = setOf(2, 3, 5, 8, 13, 16, 17)      // shapes that get a rounded mosaic instead of a square one
+    private val BODY = setOf(2, 3, 4, 6, 13, 14, 16, 17)   // where a cover can follow the body shape
 
     fun wanted(p: SharedPreferences): Set<Int> {
         val s = HashSet<Int>()
@@ -27,6 +27,7 @@ object ImageCensor {
         if (p.getBoolean("butt", true)) s.addAll(BUTT)
         if (p.getBoolean("cleavage", true)) s.addAll(Detector.CLEAVAGE)
         if (p.getBoolean("face", false) || p.getBoolean("eyes", false)) s.addAll(Detector.FACE)
+        if (p.getString("style", "mosaic") == "mannequin" && p.getBoolean("mface", true)) s.addAll(Detector.FACE)
         if (p.getBoolean("feet", false)) s.addAll(Detector.FEET)
         return s
     }
@@ -38,49 +39,50 @@ object ImageCensor {
 
         val mode = p.getString("heelmode", "off") ?: "off"
         if (mode != "off") {
-            val target = p.getString("focus", "heels") ?: "heels"       // heels, cock or both
-            val hs = ArrayList<RectF>()
-            if (target != "cock") {
-                val hd = e.heels
-                if (hd != null) {
-                    val more = p.getBoolean("heelmore", true)
-                    val thr = (0.35f - 0.033f * p.getInt("heelsens", 7)).coerceAtLeast(0.02f)
-                    val res = hd.detect(work, thr)
-                    hs.addAll(res.heels)
-                    if (hs.isEmpty() && more) {
-                        // no real heels: other footwear and feet count instead
-                        hs.addAll(res.footwear)
-                        e.nude.detect(work, 0.25f).filter { it.label in Detector.FEET }.forEach { hs.add(RectF(it.box)) }
-                    }
-                }
-            }
-            if (target != "heels") {
-                e.nude.detect(work, p.getFloat("sens", 0.35f)).filter { it.label in MALE }.forEach { hs.add(RectF(it.box)) }
-            }
-            if (hs.isNotEmpty()) {
+            val boxes = focusBoxes(e, work, p)
+            if (boxes.isNotEmpty()) {
                 work = when (mode) {
-                    "zoom" -> zoom(work, hs)
-                    "isolate_blur" -> isolate(work, hs, true, p)
-                    else -> isolate(work, hs, false, p)
+                    "zoom" -> zoom(work, boxes)
+                    "isolate_blur" -> isolate(work, boxes, true, p)
+                    else -> isolate(work, boxes, false, p)
                 }
                 changed = true
             }
-            // nothing found: the picture just goes through the normal censoring below
+            // nothing to focus on: the picture just goes through the normal censoring below
         }
 
         val want = wanted(p)
         if (want.isNotEmpty()) {
-            val all = e.nude.detect(work, p.getFloat("sens", 0.35f))
-            val dets = all.filter { it.label in want }
+            val dets = e.nude.detect(work, p.getFloat("sens", 0.35f)).filter { it.label in want }
             if (dets.isNotEmpty()) {
-                work = censor(work, all, dets, want, p)
-                changed = true
+                val c = censor(work, dets, p)
+                if (c != null) {
+                    work = c
+                    changed = true
+                }
             }
         }
         return if (changed) work else null
     }
 
     // ---------------- focus (zoom / isolate) ----------------
+
+    private fun focusBoxes(e: Engine, work: Bitmap, p: SharedPreferences): List<RectF> {
+        if ((p.getString("focustarget", "heels") ?: "heels") == "male") {
+            return e.nude.detect(work, 0.25f).filter { it.label == 14 }.map { RectF(it.box) }
+        }
+        val hd = e.heels ?: return emptyList()
+        val more = p.getBoolean("heelmore", true)
+        val thr = (0.35f - 0.033f * p.getInt("heelsens", 7)).coerceAtLeast(0.02f)
+        val res = hd.detect(work, thr)
+        val hs = ArrayList<RectF>(res.heels)
+        if (hs.isEmpty() && more) {
+            // no real heels: other footwear and feet count instead
+            hs.addAll(res.footwear)
+            e.nude.detect(work, 0.25f).filter { it.label in Detector.FEET }.forEach { hs.add(RectF(it.box)) }
+        }
+        return hs
+    }
 
     private fun zoom(src: Bitmap, hs: List<RectF>): Bitmap {
         val u = RectF(hs[0])
@@ -130,156 +132,156 @@ object ImageCensor {
         return out
     }
 
-    // ---------------- nudity censoring ----------------
+    // ---------------- censoring ----------------
 
-    private fun baseBoxes(d: List<Detector.Det>, p: SharedPreferences): List<RectF> {
+    private class Region(val rect: Rect, val label: Int)
+
+    private fun toRect(r: RectF, bmp: Bitmap): Rect {
+        val l = r.left.toInt().coerceIn(0, bmp.width - 2)
+        val t = r.top.toInt().coerceIn(0, bmp.height - 2)
+        return Rect(l, t, r.right.toInt().coerceIn(l + 2, bmp.width), r.bottom.toInt().coerceIn(t + 2, bmp.height))
+    }
+
+    private fun grow(r: Rect, f: Float, bmp: Bitmap): Rect {
+        val dx = (r.width() * f).toInt()
+        val dy = (r.height() * f).toInt()
+        return Rect(max(0, r.left - dx), max(0, r.top - dy), min(bmp.width, r.right + dx), min(bmp.height, r.bottom + dy))
+    }
+
+    private fun regionsFor(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences): List<Region> {
         val faceOn = p.getBoolean("face", false)
         val eyesOn = p.getBoolean("eyes", false)
-        return d.map { det ->
+        val items = d.map { det ->
             val b = det.box
-            if (det.label in Detector.FACE && eyesOn && !faceOn)
+            val rf = if (det.label in Detector.FACE && eyesOn && !faceOn)
                 RectF(b.left, b.top + b.height() * 0.2f, b.right, b.top + b.height() * 0.55f)
             else RectF(b)
+            Pair(rf, det.label)
         }
-    }
-
-    private fun padded(r: RectF, f: Float, bmp: Bitmap): RectF {
-        val dx = r.width() * f
-        val dy = r.height() * f
-        return RectF(
-            max(0f, r.left - dx), max(0f, r.top - dy),
-            min(bmp.width.toFloat(), r.right + dx), min(bmp.height.toFloat(), r.bottom + dy)
-        )
-    }
-
-    /** The areas to cover. Breasts, buttocks etc. get a rounded shape so the mosaic follows the body. */
-    private fun shapesFor(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences): List<Pixelate.Shape> {
-        val base = baseBoxes(d, p)
         return when (p.getString("cover", "parts")) {
-            "screen" -> listOf(Pixelate.Shape(RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat()), false))
+            "screen" -> listOf(Region(Rect(0, 0, bmp.width, bmp.height), -1))
             "group" -> {
-                val u = RectF(base[0])
-                base.forEach { u.union(it) }
-                listOf(Pixelate.Shape(padded(u, 0.15f, bmp), false))
+                val u = RectF(items[0].first)
+                items.forEach { u.union(it.first) }
+                listOf(Region(grow(toRect(u, bmp), 0.15f, bmp), -1))
             }
-            else -> d.indices.map { i ->
-                val round = d[i].label in ROUND
-                Pixelate.Shape(padded(base[i], if (round) 0.22f else 0.10f, bmp), round)
-            }
+            else -> items.map { Region(grow(toRect(it.first, bmp), 0.08f, bmp), it.second) }
         }
     }
 
-    private fun censor(src: Bitmap, all: List<Detector.Det>, dets: List<Detector.Det>, want: Set<Int>, p: SharedPreferences): Bitmap {
+    /** Returns null when nothing needs to change. */
+    private fun censor(src: Bitmap, d: List<Detector.Det>, p: SharedPreferences): Bitmap? {
         val style = p.getString("style", "mosaic") ?: "mosaic"
-        var base = src
-        var cover = dets
-        var plain = false          // true when the picture was edited naturally, so no labels on the leftovers
-        when (style) {
-            "mannequin" -> Mannequin.apply(src, all, want, p.getBoolean("mqface", true))?.let {
-                base = it.bmp; cover = it.leftover; plain = true
-            }
-            "nullify" -> Nullify.apply(src, all, dets).let {
-                base = it.bmp; cover = it.leftover; plain = true
-            }
-        }
-        if (cover.isEmpty()) return base
-        val coverStyle = if (style == "blur" || style == "solid") style else "mosaic"
-        return covers(base, cover, coverStyle, p, !plain)
-    }
-
-    private fun covers(src: Bitmap, d: List<Detector.Det>, style: String, p: SharedPreferences, labels: Boolean): Bitmap {
+        // faces alone never trigger the mannequin / smoothing looks
+        if ((style == "mannequin" || style == "smooth") && d.all { it.label in Detector.FACE }) return null
         val out = src.copy(Bitmap.Config.ARGB_8888, true)
+        when (style) {
+            "mannequin" -> { mannequin(out, d, p); return out }
+            "smooth" -> { smooth(out, d, p); return out }
+        }
         val cv = Canvas(out)
         val words = (p.getString("words", "LOSER, PIG, GOONER") ?: "")
             .split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
-        val useLabels = labels && p.getBoolean("labels", true) && words.isNotEmpty()
-        val shapes = shapesFor(d, out, p)
-
-        if (style == "mosaic") {
-            val blk = Pixelate.blockSize(out.width, out.height, p.getInt("pixel", 4), shapes)
-            val u = RectF(shapes[0].rect)
-            shapes.forEach { u.union(it.rect) }
-            val l = (u.left.toInt() - blk).coerceAtLeast(0)
-            val t = (u.top.toInt() - blk).coerceAtLeast(0)
-            val r = (u.right.toInt() + blk).coerceAtMost(out.width)
-            val b = (u.bottom.toInt() + blk).coerceAtMost(out.height)
-            val w = r - l
-            val h = b - t
-            if (w > 1 && h > 1) {
-                val px = IntArray(w * h)
-                out.getPixels(px, 0, w, l, t, w, h)
-                out.setPixels(Pixelate.render(px, w, h, l, t, shapes, blk, false), 0, w, l, t, w, h)
-            }
-        }
-        shapes.forEachIndexed { i, s ->
-            val rf = s.rect
-            val l = rf.left.toInt().coerceIn(0, out.width - 2)
-            val t = rf.top.toInt().coerceIn(0, out.height - 2)
-            val r = Rect(l, t, rf.right.toInt().coerceIn(l + 2, out.width), rf.bottom.toInt().coerceIn(t + 2, out.height))
-            if (style != "mosaic") effect(out, cv, r, style, p)
-            if (useLabels && r.width() > 120) drawLabel(cv, r, words[i % words.size])
+        val useLabels = p.getBoolean("labels", true) && words.isNotEmpty()
+        regionsFor(d, out, p).forEachIndexed { i, rg ->
+            classic(out, cv, rg.rect, rg.label, style, p)
+            if (useLabels && rg.rect.width() > 120) drawLabel(cv, rg.rect, words[i % words.size])
         }
         return out
     }
 
-    private fun effect(out: Bitmap, cv: Canvas, r: Rect, style: String, p: SharedPreferences) {
+    /** Mosaic / blur / solid, optionally cut to the shape of the body instead of a box. */
+    private fun classic(out: Bitmap, cv: Canvas, r: Rect, label: Int, style: String, p: SharedPreferences) {
         val w = r.width()
         val h = r.height()
-        when (style) {
-            "solid" -> cv.drawRect(r, Paint().apply { color = Color.rgb(30, 30, 30) })
-            else -> {
-                val crop = Bitmap.createBitmap(out, r.left, r.top, w, h)
+        val crop = Bitmap.createBitmap(out, r.left, r.top, w, h)
+        val fx: Bitmap = when (style) {
+            "solid" -> Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { Canvas(it).drawColor(Color.rgb(30, 30, 30)) }
+            "blur" -> {
                 val d = max(2, (min(w, h) * 0.012f * p.getInt("blurs", 5)).toInt())
                 val small = Bitmap.createScaledBitmap(crop, max(1, w / d), max(1, h / d), true)
-                cv.drawBitmap(small, null, r, Paint(Paint.FILTER_BITMAP_FLAG))
+                Bitmap.createScaledBitmap(small, w, h, true)
+            }
+            else -> Mosaic.make(crop, p.getInt("pixel", 6))
+        }
+        var alpha: FloatArray? = null
+        if (p.getBoolean("shape", true) && label in BODY) {
+            val model = Skin.model(out, listOf(r))
+            if (model != null) {
+                val m = Skin.mask(out, r, model, 13f, 0.1f)
+                // the middle of the box is always covered, whatever the colours say
+                for (y in h / 5 until h - h / 5) for (x in w / 5 until w - w / 5) m[y * w + x] = 1f
+                var s = 0.0
+                for (v in m) s += v
+                val cov = s / m.size
+                if (cov > 0.1 && cov < 0.97) alpha = m
+            }
+        }
+        val a = alpha
+        if (a == null) {
+            cv.drawBitmap(fx, null, r, null)
+            return
+        }
+        val po = IntArray(w * h)
+        val pf = IntArray(w * h)
+        crop.getPixels(po, 0, w, 0, 0, w, h)
+        fx.getPixels(pf, 0, w, 0, 0, w, h)
+        for (i in po.indices) {
+            val t = a[i]
+            if (t >= 0.999f) po[i] = pf[i]
+            else if (t > 0.003f) {
+                val x = po[i]
+                val y = pf[i]
+                val nr = (((x shr 16) and 255) + (((y shr 16) and 255) - ((x shr 16) and 255)) * t).toInt().coerceIn(0, 255)
+                val ng = (((x shr 8) and 255) + (((y shr 8) and 255) - ((x shr 8) and 255)) * t).toInt().coerceIn(0, 255)
+                val nb = ((x and 255) + ((y and 255) - (x and 255)) * t).toInt().coerceIn(0, 255)
+                po[i] = (0xFF shl 24) or (nr shl 16) or (ng shl 8) or nb
+            }
+        }
+        out.setPixels(po, 0, w, r.left, r.top, w, h)
+    }
+
+    /** Turns the skin into glossy white plastic with the same shape, and the face into a blank oval. */
+    private fun mannequin(out: Bitmap, d: List<Detector.Det>, p: SharedPreferences) {
+        val faceDets = d.filter { it.label in Detector.FACE }
+        val bodyDets = d.filter { it.label !in Detector.FACE }
+        val boxes = bodyDets.map { toRect(it.box, out) }
+        val model = Skin.model(out, boxes)
+        val areas: List<Rect> = when (p.getString("cover", "parts")) {
+            "screen" -> listOf(Rect(0, 0, out.width, out.height))
+            "group" -> {
+                val u = RectF(bodyDets[0].box)
+                bodyDets.forEach { u.union(it.box) }
+                listOf(grow(toRect(u, out), 0.15f, out))
+            }
+            else -> boxes.map { grow(it, 0.15f, out) }
+        }
+        if (model != null) {
+            for (a in areas) Fx.whiten(out, a, Skin.mask(out, a, model, 13f, 0.06f, keepClothes = true))
+        } else {
+            // couldn't read the skin colour: plain mosaic instead
+            val cv = Canvas(out)
+            for (b in boxes) cv.drawBitmap(Mosaic.make(Bitmap.createBitmap(out, b.left, b.top, b.width(), b.height()), p.getInt("pixel", 6)), null, b, null)
+        }
+        if (p.getBoolean("mface", true)) for (f in faceDets) Fx.blankFace(out, toRect(f.box, out))
+    }
+
+    /** Nullifies nudity: nipples disappear, genitals are smoothed away. Everything else gets a mosaic. */
+    private fun smooth(out: Bitmap, d: List<Detector.Det>, p: SharedPreferences) {
+        val cv = Canvas(out)
+        for (det in d) {
+            when (det.label) {
+                3 -> Fx.smoothBreast(out, toRect(det.box, out))
+                4, 14, 6 -> Fx.smoothGenital(out, grow(toRect(det.box, out), 0.12f, out))
+                else -> {
+                    val r = grow(toRect(det.box, out), 0.08f, out)
+                    cv.drawBitmap(Mosaic.make(Bitmap.createBitmap(out, r.left, r.top, r.width(), r.height()), p.getInt("pixel", 6)), null, r, null)
+                }
             }
         }
     }
 
-    // ---------------- live overlay (screen capture) ----------------
-
-    /** Patches to lay over the screen for the mannequin / remove-nudity styles, plus what is left to cover normally. */
-    class Live(val patches: List<Pair<Rect, Bitmap>>, val leftover: List<Detector.Det>)
-
-    fun live(frame: Bitmap, all: List<Detector.Det>, dets: List<Detector.Det>, p: SharedPreferences): Live {
-        val style = p.getString("style", "mosaic") ?: "mosaic"
-        var bmp = frame
-        var left = dets
-        var regions: List<Rect> = emptyList()
-        when (style) {
-            "mannequin" -> Mannequin.apply(frame, all, wanted(p), p.getBoolean("mqface", true))?.let {
-                bmp = it.bmp; left = it.leftover; regions = it.regions
-            }
-            "nullify" -> Nullify.apply(frame, all, dets).let {
-                bmp = it.bmp; left = it.leftover; regions = it.regions
-            }
-        }
-        val patches = ArrayList<Pair<Rect, Bitmap>>()
-        for (r in regions) {
-            val l = r.left.coerceIn(0, bmp.width - 2)
-            val t = r.top.coerceIn(0, bmp.height - 2)
-            val rr = r.right.coerceIn(l + 2, bmp.width)
-            val bb = r.bottom.coerceIn(t + 2, bmp.height)
-            patches.add(Pair(Rect(l, t, rr, bb), Bitmap.createBitmap(bmp, l, t, rr - l, bb - t)))
-        }
-        return Live(patches, left)
-    }
-
-    /** Mosaic patch for the live overlay: opaque blocks inside the shape, transparent elsewhere. */
-    fun mosaicPatch(frame: Bitmap, r: Rect, round: Boolean, strength: Int): Bitmap {
-        val w = r.width()
-        val h = r.height()
-        val shape = Pixelate.Shape(RectF(r), round)
-        val blk = Pixelate.blockSize(frame.width, frame.height, strength, listOf(shape))
-        val px = IntArray(w * h)
-        frame.getPixels(px, 0, w, r.left, r.top, w, h)
-        val res = Pixelate.render(px, w, h, r.left, r.top, listOf(shape), blk, true)
-        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        b.setPixels(res, 0, w, 0, 0, w, h)
-        return b
-    }
-
-    // ---------------- labels ----------------
+    // ---------------- text and placeholder ----------------
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER

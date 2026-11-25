@@ -59,15 +59,15 @@ object SettingsUi {
             "mosaic" to "Mosaic (pixels)",
             "blur" to "Blur",
             "solid" to "Solid box",
-            "mannequin" to "Mannequin (skin becomes white gloss, same proportions)",
-            "nullify" to "Remove nudity (nipples gone, genitals smoothed out)"
+            "mannequin" to "Mannequin (white gloss skin, same shape)",
+            "smooth" to "Smooth (nipples and genitals disappear)"
         )))
-        strength("Pixel size (higher = bigger blocks)", "pixel", 4)
+        strength("Pixel size (higher = bigger blocks)", "pixel", 6)
         strength("Blur strength (higher = blurrier)", "blurs", 5)
-        root.addView(check("Mannequin: also blank the face", "mqface", true))
+        root.addView(check("Cover follows the body shape instead of a box (mosaic, blur, solid)", "shape", true))
+        root.addView(check("Mannequin: blank white face", "mface", true))
         root.addView(TextView(ctx).apply {
-            text = "Mannequin and Remove nudity work on faces, breasts, genitals and anus. Anything else you tick under Censor " +
-                "(buttocks, cleavage, feet ...) is still covered with the mosaic."
+            text = "Mannequin looks best with Cover set to \u201cEntire picture\u201d."
             textSize = 13f
         })
 
@@ -96,24 +96,20 @@ object SettingsUi {
             })
         })
 
-        root.addView(label("Focus (safe browser only)"))
+        root.addView(label("Focus mode (safe browser only)"))
         root.addView(radios("heelmode", "off", listOf(
             "off" to "Off",
-            "zoom" to "Zoom in on the target",
-            "isolate_blur" to "Blur everything except the target",
-            "isolate_black" to "Black out everything except the target"
+            "zoom" to "Zoom in on the heels",
+            "isolate_blur" to "Blur everything except the heels",
+            "isolate_black" to "Black out everything except the heels"
         )))
-        root.addView(label("Focus target"))
-        root.addView(radios("focus", "heels", listOf(
-            "heels" to "High heels",
-            "cock" to "Male genitals",
-            "both" to "Both"
-        )))
+        root.addView(label("Focus on"))
+        root.addView(radios("focustarget", "heels", listOf("heels" to "High heels", "male" to "Male genitals")))
         strength("Heel detection sensitivity (higher = finds more)", "heelsens", 7)
-        root.addView(check("Also count feet and other footwear as heels", "heelmore", true))
+        root.addView(check("Heels: also count feet and other footwear", "heelmore", true))
         root.addView(TextView(ctx).apply {
-            text = "Pictures where the target isn't found are simply censored with your normal settings. " +
-                "The result is censored afterwards too: to see the focused male genitals, untick \"Male genitals\" under Censor."
+            text = "Pictures with nothing to focus on are simply censored with your normal settings. " +
+                "If you focus on male genitals, untick \u201cMale genitals\u201d under Censor, or they will be covered."
             textSize = 13f
         })
     }
