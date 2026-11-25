@@ -358,15 +358,9 @@ class CensorService : Service() {
                 val dets = all.filter { it.label in want }
                 if (dets.isNotEmpty()) {
                     val style = p.getString("style", "mosaic") ?: "mosaic"
-                    var live: ImageCensor.Live? = null
-                    if (style == "mannequin" || style == "nullify") {
-                        // heavy work stays outside the lock; only done when something isn't covered yet
-                        val need = synchronized(lock) { anyUncovered(dets, cumX - cx, cumY - cy) }
-                        if (need) live = ImageCensor.live(frame, all, dets, p)
-                    }
                     synchronized(lock) {
                         // the picture may have scrolled while we were detecting: carry the boxes along
-                        if (reconcile(dets, frame, cumX - cx, cumY - cy, p, live)) pushLocked()
+                        if (reconcile(dets, frame, cumX - cx, cumY - cy, p)) pushLocked()
                     }
                 }
                 Thread.sleep(30)
@@ -422,26 +416,18 @@ class CensorService : Service() {
         return false
     }
 
-    private fun reconcile(dets: List<Detector.Det>, f: Bitmap, dx: Float, dy: Float, p: SharedPreferences, live: ImageCensor.Live?): Boolean {
+    private fun reconcile(dets: List<Detector.Det>, f: Bitmap, dx: Float, dy: Float, p: SharedPreferences): Boolean {
         val style = p.getString("style", "mosaic") ?: "mosaic"
+        // ImageCensor does not expose tracked mannequin/nullify patches. Use a
+        // supported opaque cover for those styles in the live screen overlay.
         val patchStyle = style == "mannequin" || style == "nullify"
         val words = (p.getString("words", "LOSER, PIG, GOONER") ?: "")
             .split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
         val useLabels = p.getBoolean("labels", true) && words.isNotEmpty() && !patchStyle
         var changed = false
-        var toCover = dets
         val coverStyle = if (patchStyle) "mosaic" else style
-        if (patchStyle) {
-            if (live == null) return false          // everything is already covered
-            for ((rect, bmp) in live.patches) {
-                val cur = RectF(rect)
-                cur.offset(dx, dy)
-                if (addOrGrow(cur, null, true) { bmp }) changed = true
-            }
-            toCover = live.leftover
-        }
-        if (toCover.isNotEmpty()) {
-            for ((tf, round) in rectsFor(toCover, f, p)) {
+        if (dets.isNotEmpty()) {
+            for ((tf, round) in rectsFor(dets, f, p)) {
                 val cur = RectF(tf)
                 cur.offset(dx, dy)
                 val word = if (useLabels) words[((trackSeq + 1) % words.size).toInt()] else null
@@ -524,7 +510,10 @@ class CensorService : Service() {
                 val blk = 6 + 2 * p.getInt("blurs", 5)
                 Bitmap.createScaledBitmap(crop, maxOf(2, w / blk), maxOf(2, h / blk), true)
             }
-            else -> ImageCensor.mosaicPatch(frame, r, round, p.getInt("pixel", 4))
+            else -> {
+                val crop = Bitmap.createBitmap(frame, r.left, r.top, r.width(), r.height())
+                Mosaic.make(crop, p.getInt("pixel", 4))
+            }
         }
     }
 
