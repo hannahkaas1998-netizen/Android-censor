@@ -40,7 +40,7 @@ class CensorService : Service() {
     private var motionThread: Thread? = null
     private var detectThread: Thread? = null
 
-    private class Track(var box: RectF, val word: String?, val base: Bitmap?) {
+    private class Track(var box: RectF, val word: String?, val base: Bitmap?, val smooth: Boolean) {
         var vx = 0f
         var vy = 0f
         var strikes = 0
@@ -57,10 +57,6 @@ class CensorService : Service() {
     private var trackSeq = 0L
     private var sxs = 2f
     private var sys = 2f
-
-    private val NUDE_F = setOf(2, 3, 4, 6)
-    private val BUTT = setOf(2, 17)
-    private val MALE = setOf(14)
 
     override fun onBind(i: Intent?): IBinder? = null
 
@@ -358,11 +354,19 @@ class CensorService : Service() {
                 if (frame == null || seq == lastSeq) { Thread.sleep(15); continue }
                 lastSeq = seq
                 val want = wanted(p)
-                val dets = det.detect(frame, p.getFloat("sens", 0.35f)).filter { it.label in want }
+                val all = det.detect(frame, p.getFloat("sens", 0.35f))
+                val dets = all.filter { it.label in want }
                 if (dets.isNotEmpty()) {
+                    val style = p.getString("style", "mosaic") ?: "mosaic"
+                    var live: ImageCensor.Live? = null
+                    if (style == "mannequin" || style == "nullify") {
+                        // heavy work stays outside the lock; only done when something isn't covered yet
+                        val need = synchronized(lock) { anyUncovered(dets, cumX - cx, cumY - cy) }
+                        if (need) live = ImageCensor.live(frame, all, dets, p)
+                    }
                     synchronized(lock) {
                         // the picture may have scrolled while we were detecting: carry the boxes along
-                        if (reconcile(dets, frame, cumX - cx, cumY - cy, p)) pushLocked()
+                        if (reconcile(dets, frame, cumX - cx, cumY - cy, p, live)) pushLocked()
                     }
                 }
                 Thread.sleep(30)
@@ -386,32 +390,62 @@ class CensorService : Service() {
         return if (u <= 0f) 0f else i / u
     }
 
-    private fun reconcile(dets: List<Detector.Det>, f: Bitmap, dx: Float, dy: Float, p: SharedPreferences): Boolean {
+    private fun anyUncovered(dets: List<Detector.Det>, dx: Float, dy: Float): Boolean {
+        for (d in dets) {
+            val cur = RectF(d.box)
+            cur.offset(dx, dy)
+            val area = cur.width() * cur.height()
+            if (area <= 0f) continue
+            if (tracks.none { inter(it.box, cur) / area > 0.5f }) return true
+        }
+        return false
+    }
+
+    /** Adds a cover for [cur], or grows the existing cover that already sits there. */
+    private fun addOrGrow(cur: RectF, word: String?, smooth: Boolean, make: () -> Bitmap?): Boolean {
+        var best: Track? = null
+        val area = cur.width() * cur.height()
+        for (tr in tracks) {
+            if (area > 0f && (inter(tr.box, cur) / area > 0.5f || iou(tr.box, cur) > 0.3f)) { best = tr; break }
+        }
+        if (best == null) {
+            trackSeq++
+            tracks.add(Track(cur, word, make(), smooth))
+            return true
+        }
+        val u = RectF(best.box)
+        u.union(cur)
+        if (u.width() - best.box.width() > 4f || u.height() - best.box.height() > 4f) {
+            best.box = u
+            return true
+        }
+        return false
+    }
+
+    private fun reconcile(dets: List<Detector.Det>, f: Bitmap, dx: Float, dy: Float, p: SharedPreferences, live: ImageCensor.Live?): Boolean {
         val style = p.getString("style", "mosaic") ?: "mosaic"
+        val patchStyle = style == "mannequin" || style == "nullify"
         val words = (p.getString("words", "LOSER, PIG, GOONER") ?: "")
             .split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
-        val useLabels = p.getBoolean("labels", true) && words.isNotEmpty()
+        val useLabels = p.getBoolean("labels", true) && words.isNotEmpty() && !patchStyle
         var changed = false
-        for (tf in rectsFor(dets, f, p)) {
-            val cur = RectF(tf)
-            cur.offset(dx, dy)
-            var best: Track? = null
-            val area = cur.width() * cur.height()
-            for (tr in tracks) {
-                if (area > 0f && (inter(tr.box, cur) / area > 0.5f || iou(tr.box, cur) > 0.3f)) { best = tr; break }
+        var toCover = dets
+        val coverStyle = if (patchStyle) "mosaic" else style
+        if (patchStyle) {
+            if (live == null) return false          // everything is already covered
+            for ((rect, bmp) in live.patches) {
+                val cur = RectF(rect)
+                cur.offset(dx, dy)
+                if (addOrGrow(cur, null, true) { bmp }) changed = true
             }
-            if (best == null) {
-                trackSeq++
-                val word = if (useLabels) words[(trackSeq % words.size).toInt()] else null
-                tracks.add(Track(cur, word, makeBase(f, toRect(tf, f), style, p)))
-                changed = true
-            } else {
-                val u = RectF(best.box)
-                u.union(cur)
-                if (u.width() - best.box.width() > 4f || u.height() - best.box.height() > 4f) {
-                    best.box = u
-                    changed = true
-                }
+            toCover = live.leftover
+        }
+        if (toCover.isNotEmpty()) {
+            for ((tf, round) in rectsFor(toCover, f, p)) {
+                val cur = RectF(tf)
+                cur.offset(dx, dy)
+                val word = if (useLabels) words[((trackSeq + 1) % words.size).toInt()] else null
+                if (addOrGrow(cur, word, coverStyle == "blur") { makeBase(f, toRect(tf, f), round, coverStyle, p) }) changed = true
             }
         }
         if (mergeOverlapping()) changed = true
@@ -449,7 +483,10 @@ class CensorService : Service() {
         return Rect(l, t, r.right.toInt().coerceIn(l + 2, bmp.width), r.bottom.toInt().coerceIn(t + 2, bmp.height))
     }
 
-    private fun rectsFor(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences): List<RectF> {
+    private val ROUND = setOf(2, 3, 5, 8, 13, 16, 17)
+
+    /** The areas to cover, and whether each gets a rounded mosaic (breasts, buttocks ...) instead of a square one. */
+    private fun rectsFor(d: List<Detector.Det>, bmp: Bitmap, p: SharedPreferences): List<Pair<RectF, Boolean>> {
         val faceOn = p.getBoolean("face", false)
         val eyesOn = p.getBoolean("eyes", false)
         val base = d.map { det ->
@@ -459,13 +496,16 @@ class CensorService : Service() {
             else RectF(b)
         }
         return when (p.getString("cover", "parts")) {
-            "screen" -> listOf(RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat()))
+            "screen" -> listOf(Pair(RectF(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat()), false))
             "group" -> {
                 val u = RectF(base[0])
                 base.forEach { u.union(it) }
-                listOf(pad(u, 0.15f, bmp))
+                listOf(Pair(pad(u, 0.15f, bmp), false))
             }
-            else -> base.map { pad(it, 0.08f, bmp) }       // tight boxes, like the example
+            else -> base.mapIndexed { i, r ->
+                val round = d[i].label in ROUND
+                Pair(pad(r, if (round) 0.22f else 0.10f, bmp), round)
+            }
         }
     }
 
@@ -473,26 +513,29 @@ class CensorService : Service() {
     // Drawing
     // ------------------------------------------------------------------------------------
 
-    /** Chunky mosaic (about 5 blocks across the short side), or a blur source. Made once per cover. */
-    private fun makeBase(frame: Bitmap, r: Rect, style: String, p: SharedPreferences): Bitmap? {
-        if (style == "solid") return null
-        val w = r.width()
-        val h = r.height()
-        val crop = Bitmap.createBitmap(frame, r.left, r.top, w, h)
-        val cells = (12 - p.getInt("pixel", 6)).coerceAtLeast(2)       // fewer cells = chunkier
-        val blk = if (style == "blur") 6 + 2 * p.getInt("blurs", 5) else maxOf(8, minOf(w, h) / cells)
-        return Bitmap.createScaledBitmap(crop, maxOf(2, w / blk), maxOf(2, h / blk), true)
+    /** The picture of a cover: a mosaic patch on the shared grid, a blur source, or nothing for a solid box. Made once per cover. */
+    private fun makeBase(frame: Bitmap, r: Rect, round: Boolean, style: String, p: SharedPreferences): Bitmap? {
+        return when (style) {
+            "solid" -> null
+            "blur" -> {
+                val w = r.width()
+                val h = r.height()
+                val crop = Bitmap.createBitmap(frame, r.left, r.top, w, h)
+                val blk = 6 + 2 * p.getInt("blurs", 5)
+                Bitmap.createScaledBitmap(crop, maxOf(2, w / blk), maxOf(2, h / blk), true)
+            }
+            else -> ImageCensor.mosaicPatch(frame, r, round, p.getInt("pixel", 4))
+        }
     }
 
     private fun pushLocked() {
         val ov = overlay ?: return
-        val style = getSharedPreferences("cfg", MODE_PRIVATE).getString("style", "mosaic")
         ov.items = tracks.map { t ->
             val lx = (t.vx * 0.09f).coerceIn(-120f, 120f)     // aim slightly ahead of the motion
             val ly = (t.vy * 0.09f).coerceIn(-120f, 120f)
             OverlayView.Item(
                 RectF((t.box.left + lx) * sxs, (t.box.top + ly) * sys, (t.box.right + lx) * sxs, (t.box.bottom + ly) * sys),
-                t.base, style == "blur", t.word, 255
+                t.base, t.smooth, t.word, 255
             )
         }
         ov.show = true
@@ -513,16 +556,7 @@ class CensorService : Service() {
         }
     }
 
-    private fun wanted(p: SharedPreferences): Set<Int> {
-        val s = HashSet<Int>()
-        if (p.getBoolean("nudity", true)) s.addAll(NUDE_F)
-        if (p.getBoolean("male", true)) s.addAll(MALE)
-        if (p.getBoolean("butt", true)) s.addAll(BUTT)
-        if (p.getBoolean("cleavage", true)) s.addAll(Detector.CLEAVAGE)
-        if (p.getBoolean("face", false) || p.getBoolean("eyes", false)) s.addAll(Detector.FACE)
-        if (p.getBoolean("feet", false)) s.addAll(Detector.FEET)
-        return s
-    }
+    private fun wanted(p: SharedPreferences): Set<Int> = ImageCensor.wanted(p)
 
     private fun pad(r: RectF, f: Float, b: Bitmap): RectF {
         val dx = r.width() * f
