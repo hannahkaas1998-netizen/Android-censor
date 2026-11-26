@@ -13,6 +13,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.webkit.*
 import android.widget.Button
@@ -23,6 +26,7 @@ class BrowserActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var urlBox: EditText
     private lateinit var bridge: FeedBridge
+    private lateinit var bar: LinearLayout
     private var ua: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -32,7 +36,7 @@ class BrowserActivity : Activity() {
         Thread { try { ImageProxy.warm(this) } catch (_: Throwable) {} }.start()
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(8, 8, 8, 8) }
+        bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(8, 8, 8, 8) }
         val back = Button(this).apply { text = "<"; setOnClickListener { if (web.canGoBack()) web.goBack() } }
         urlBox = EditText(this).apply {
             setSingleLine(true)
@@ -44,9 +48,11 @@ class BrowserActivity : Activity() {
         val saveBtn = Button(this).apply { text = "\u2B07"; setOnClickListener { collectAndSave() } }
         val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
         val gear = Button(this).apply { text = "\u2699"; setOnClickListener { openSettings(p) } }
+        val playBtn = Button(this).apply { text = "\u25B6"; setOnClickListener { web.loadUrl(FEED + "#__play") } }
         bar.addView(back)
         bar.addView(urlBox)
         bar.addView(feedBtn)
+        bar.addView(playBtn)
         bar.addView(gear)
         bar.addView(saveBtn)
 
@@ -58,7 +64,9 @@ class BrowserActivity : Activity() {
         // look like a normal Chrome browser instead of an embedded WebView
         ua = web.settings.userAgentString.replace("; wv", "").replace(" Version/4.0", "")
         web.settings.userAgentString = ua
-        bridge = FeedBridge(web, ua) { urls -> runOnUiThread { confirmSave(urls) } }
+        bridge = FeedBridge(web, ua, p, getSharedPreferences("gamebak", MODE_PRIVATE),
+            { on -> runOnUiThread { setFullscreen(on) } }) { urls -> runOnUiThread { confirmSave(urls) } }
+        bridge.restoreLevels()      // in case a slideshow was cut short last time
         web.addJavascriptInterface(bridge, "Android")
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
@@ -82,6 +90,8 @@ class BrowserActivity : Activity() {
                     urlBox.setText(url)
                     bridge.page = url
                 }
+                bridge.restoreLevels()      // a new page means any slideshow is over
+                setFullscreen(false)
             }
         }
         if (Build.VERSION.SDK_INT >= 24) {
@@ -94,12 +104,34 @@ class BrowserActivity : Activity() {
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        if (p.getBoolean("feedmode", true)) web.loadUrl(FEED)
+        if (intent.getBooleanExtra("play", false)) web.loadUrl(FEED + "#__play")
+        else if (p.getBoolean("feedmode", true)) web.loadUrl(FEED)
         else load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
     }
 
     companion object {
         const val FEED = "https://old.reddit.com/__feed"
+    }
+
+    /** Slideshow mode: hide the browser bar and the system bars, keep the screen awake. */
+    private fun setFullscreen(on: Boolean) {
+        bar.visibility = if (on) View.GONE else View.VISIBLE
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.let {
+                if (on) {
+                    it.hide(WindowInsets.Type.systemBars())
+                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else it.show(WindowInsets.Type.systemBars())
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (on)
+                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            else View.SYSTEM_UI_FLAG_VISIBLE
+        }
     }
 
     /** Finds the pictures on the current page (the ones that have loaded) and offers to save them to Photos. */
@@ -189,6 +221,7 @@ class BrowserActivity : Activity() {
     }
 
     override fun onDestroy() {
+        bridge.restoreLevels()
         web.destroy()
         super.onDestroy()
     }

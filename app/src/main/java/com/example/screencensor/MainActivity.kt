@@ -35,6 +35,10 @@ class MainActivity : Activity() {
             text = "Open safe browser"
             setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java)) }
         })
+        root.addView(Button(this).apply {
+            text = "Slideshow game (full screen)"
+            setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra("play", true)) }
+        })
         root.addView(check("Open in the feed view (only titles and pictures, made for phones)", "feedmode", true))
         root.addView(EditText(this).apply {
             hint = "Start page for the normal site view"

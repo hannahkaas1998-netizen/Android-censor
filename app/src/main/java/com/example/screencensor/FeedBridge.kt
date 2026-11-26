@@ -1,5 +1,6 @@
 package com.example.screencensor
 
+import android.content.SharedPreferences
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -12,8 +13,65 @@ import java.net.URL
  * Lets the feed page ask the app to download Reddit pages for it, using the browser's login cookies.
  * Only the feed page may use it, and only for old.reddit.com.
  */
-class FeedBridge(private val web: WebView, private val ua: String, private val onSave: (List<String>) -> Unit) {
+class FeedBridge(
+    private val web: WebView,
+    private val ua: String,
+    private val prefs: SharedPreferences,
+    private val backup: SharedPreferences,
+    private val onFullscreen: (Boolean) -> Unit,
+    private val onSave: (List<String>) -> Unit
+) {
     @Volatile var page: String = ""
+
+    private fun onFeed() = page.startsWith("https://old.reddit.com/__feed")
+
+    /** The slideshow asks for the whole screen (browser bar and system bars hidden, screen kept on). */
+    @JavascriptInterface
+    fun fullscreen(on: Boolean) {
+        if (!onFeed()) return
+        onFullscreen(on)
+    }
+
+    /**
+     * The slideshow game changes the censor style between rounds. Only style / pixel size / blur strength can be
+     * changed, only to known values, and the person's own settings are remembered and put back afterwards.
+     */
+    @JavascriptInterface
+    fun gameLevel(json: String) {
+        if (!onFeed()) return
+        try {
+            val o = JSONObject(json)
+            val style = o.optString("style", "")
+            if (style !in setOf("mosaic", "blur", "solid", "mannequin", "smooth")) return
+            if (!backup.getBoolean("active", false)) {
+                backup.edit().putBoolean("active", true)
+                    .putString("style", prefs.getString("style", "mosaic"))
+                    .putInt("pixel", prefs.getInt("pixel", 6))
+                    .putInt("blurs", prefs.getInt("blurs", 5)).apply()
+            }
+            val e = prefs.edit().putString("style", style)
+            if (o.has("pixel")) e.putInt("pixel", o.getInt("pixel").coerceIn(1, 10))
+            if (o.has("blurs")) e.putInt("blurs", o.getInt("blurs").coerceIn(1, 10))
+            e.apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    @JavascriptInterface
+    fun gameEnd() {
+        if (!onFeed()) return
+        restoreLevels()
+    }
+
+    /** Puts the person's own censor style back. Also called when a page loads and when the browser closes. */
+    fun restoreLevels() {
+        if (!backup.getBoolean("active", false)) return
+        prefs.edit()
+            .putString("style", backup.getString("style", "mosaic"))
+            .putInt("pixel", backup.getInt("pixel", 6))
+            .putInt("blurs", backup.getInt("blurs", 5)).apply()
+        backup.edit().clear().apply()
+    }
 
     /** The feed's full-screen viewer asks to save pictures to Photos. Only the feed page may do this. */
     @JavascriptInterface
