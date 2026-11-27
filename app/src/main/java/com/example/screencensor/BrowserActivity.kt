@@ -99,7 +99,7 @@ class BrowserActivity : Activity() {
         bridge = FeedBridge(
             web, ua,
             { urls -> runOnUiThread { confirmSave(urls) } },
-            { on -> runOnUiThread { setImmersive(on) } }
+            { on -> runOnUiThread { applyFullScreen(on) } }
         )
         web.addJavascriptInterface(bridge, "Android")
         web.webViewClient = object : WebViewClient() {
@@ -150,7 +150,7 @@ class BrowserActivity : Activity() {
 
     /** Full screen for the random-pictures view: hides the address bar and the phone's bars. */
     @Suppress("DEPRECATION")
-    private fun setImmersive(on: Boolean) {
+    private fun applyFullScreen(on: Boolean) {
         bar.visibility = if (on) View.GONE else View.VISIBLE
         window.decorView.systemUiVisibility = if (on) {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
