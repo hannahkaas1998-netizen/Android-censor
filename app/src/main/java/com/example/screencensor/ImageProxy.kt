@@ -47,6 +47,11 @@ object ImageProxy {
         val accept = (headers["Accept"] ?: headers["accept"] ?: "").lowercase()
         val host = r.url.host ?: ""
 
+        // log-in and captcha pictures must reach the page untouched, or the check can't be solved
+        val lh = host.lowercase()
+        if (url.contains("captcha", ignoreCase = true) || lh.contains("hcaptcha") || lh.contains("arkose") ||
+            lh.contains("funcaptcha") || lh.contains("challenges.cloudflare") || lh == "accounts.google.com") return null
+
         val video = accept.startsWith("video/") || host == "v.redd.it" ||
             path.endsWith(".mp4") || path.endsWith(".m3u8") || path.endsWith(".mpd") ||
             path.endsWith(".m4s") || path.endsWith(".webm") || path.endsWith(".m4v") || path.endsWith(".mov")
