@@ -2,7 +2,10 @@ package com.example.screencensor
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import android.widget.LinearLayout
+import android.widget.Toast
 
 /** The settings, as tidy collapsible cards. Used on the start screen and in the browser's menu. */
 object SettingsUi {
@@ -72,6 +75,16 @@ object SettingsUi {
         // ---- videos
         val vid = Ui.section(ctx, root, "Videos", false)
         Ui.toggle(ctx, vid, "Block videos", "They can't be censored. Untick to watch them uncensored.", p, "blockvideo", true)
+
+        // ---- reddit login
+        val acc = Ui.section(ctx, root, "Reddit login", false)
+        acc.addView(Ui.note(ctx, "If logging in keeps giving errors, clear the saved cookies and log in again from scratch."))
+        acc.addView(Ui.button(ctx, "Reset login (clear cookies)", false) {
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+            WebStorage.getInstance().deleteAllData()
+            Toast.makeText(ctx, "Cleared. Open the browser and log in again at old.reddit.com/login", Toast.LENGTH_LONG).show()
+        })
 
         // ---- browser (start screen only)
         if (includeBrowser) {

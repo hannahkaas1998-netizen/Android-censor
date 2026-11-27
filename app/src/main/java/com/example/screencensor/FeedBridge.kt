@@ -79,7 +79,14 @@ class FeedBridge(
                 c.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                 CookieManager.getInstance().getCookie(url)?.let { c.setRequestProperty("Cookie", it) }
                 status = c.responseCode
-                c.headerFields?.get("Set-Cookie")?.forEach { CookieManager.getInstance().setCookie(url, it) }
+                // only take cookies from successful replies, and never the log-in ones: a refused request
+                // used to be able to wipe the session and make logging in fail afterwards
+                if (status in 200..299) {
+                    val keep = listOf("reddit_session", "token_v2", "loid", "session=", "csrf_token")
+                    c.headerFields?.get("Set-Cookie")?.forEach { sc ->
+                        if (keep.none { sc.startsWith(it, ignoreCase = true) }) CookieManager.getInstance().setCookie(url, sc)
+                    }
+                }
                 val s = if (status in 200..399) c.inputStream else c.errorStream
                 body = s?.bufferedReader()?.use { it.readText() }?.take(3_000_000) ?: ""
                 c.disconnect()

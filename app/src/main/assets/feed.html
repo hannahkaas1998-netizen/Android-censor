@@ -1020,6 +1020,12 @@ select{flex:0 0 auto;max-width:42%}
     if (e.clientX / window.innerWidth < 0.3) shPrev(); else shNext();
   });
   $('shclose').addEventListener('click', function () { closeShuffle(false); });
+  // the app's back button asks this first: true = something was closed, false = nothing open (the app then goes home)
+  window.feedBack = function () {
+    if (SH.open) { closeShuffle(false); return true; }
+    if (vopen) { closeViewer(false); return true; }
+    return false;
+  };
   $('shsubs').addEventListener('click', showPicker);
   $('shsave').addEventListener('click', function () { var it = SH.hist[SH.idx]; if (it) doSave([it.full]); });
   $('shufbtn').addEventListener('click', openShuffle);
@@ -1082,7 +1088,7 @@ select{flex:0 0 auto;max-width:42%}
   var RW_EARLY = { stop: 15, slow: 35, medium: 30, fast: 15, super: 5 };
   var RW_LATE = { stop: 2, slow: 5, medium: 16, fast: 35, super: 42 };
   var RLEN = { stop: [3, 10], slow: [6, 25], medium: [6, 25], fast: [6, 22], super: [4, 12] };    // seconds a pace lasts
-  var PBUILD = 'pace build 6';
+  var PBUILD = 'pace build 7';
   var PC = { lv: 'random', rng: '5-10', snd: false, vib: true, csnd: true, voice: false, run: false, t0: 0, dur: 0, last: 0, phase: 0, bpm: 0, target: 0,
              seg: '', segEnd: 0, ended: false, raf: 0, txtAt: 0, ac: null, lastSec: -1 };
   try {

@@ -81,6 +81,7 @@ class BrowserActivity : Activity() {
             setOnEditorActionListener { _, _, _ -> load(text.toString()); true }
         }
 
+        bar.addView(pill("\u2302") { finish() })                  // home: back to the main app screen
         bar.addView(pill("\u2039") { if (web.canGoBack()) web.goBack() })
         bar.addView(urlBox)
         bar.addView(pill("Feed") { web.loadUrl(FEED) })
@@ -259,7 +260,13 @@ class BrowserActivity : Activity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else super.onBackPressed()
+        val u = web.url ?: ""
+        if (u.startsWith(FEED)) {
+            // on the feed: first close a picture / the shuffle if one is open, otherwise leave for the main screen
+            web.evaluateJavascript("(function(){return window.feedBack?window.feedBack():false})()") { r ->
+                if (r != "true") finish()
+            }
+        } else if (web.canGoBack()) web.goBack() else super.onBackPressed()
     }
 
     override fun onDestroy() {
