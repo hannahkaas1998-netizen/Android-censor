@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
 import android.util.LruCache
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
@@ -136,8 +138,17 @@ object ImageProxy {
     }
 
     private fun jpeg(b: Bitmap): ByteArray {
+        // JPEG has no transparency: transparent pixels (PNG/WebP with alpha) would come out solid black,
+        // so flatten the picture onto white first.
+        val flat = if (b.hasAlpha()) {
+            Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888).also {
+                val c = Canvas(it)
+                c.drawColor(Color.WHITE)
+                c.drawBitmap(b, 0f, 0f, null)
+            }
+        } else b
         val bos = ByteArrayOutputStream()
-        b.compress(Bitmap.CompressFormat.JPEG, 90, bos)
+        flat.compress(Bitmap.CompressFormat.JPEG, 90, bos)
         return bos.toByteArray()
     }
 
