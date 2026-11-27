@@ -24,6 +24,25 @@ select{flex:0 0 auto;max-width:42%}
 #msg{padding:18px 16px;color:#a5a5b0;text-align:center;line-height:1.45}
 #msg a{color:#7cb4ff;margin:0 8px;white-space:nowrap}
 #more{height:1px}
+#shufbtn{margin-left:auto;font:inherit;font-size:14px;color:#06121f;background:#7cb4ff;border:0;border-radius:18px;padding:6px 14px;font-weight:600}
+#shuf{display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:30;background:#000}
+#shstage{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center}
+#shimg{max-width:100%;max-height:100%;object-fit:contain;opacity:0;transition:opacity .2s}
+#shtop{position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;gap:8px}
+#shtop button,#shpanel button.b{font:inherit;color:#fff;background:rgba(30,30,34,.85);border:0;border-radius:22px;padding:10px 16px}
+#shtop .sp{flex:1}
+#shcap{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:34px 16px calc(env(safe-area-inset-bottom) + 14px);color:#e8e8ee;font-size:14px;line-height:1.35;background:linear-gradient(transparent,rgba(0,0,0,.75));pointer-events:none}
+#shmsg{display:none;position:absolute;z-index:2;left:20px;right:20px;top:50%;transform:translateY(-50%);text-align:center;color:#c8c8d0;font-size:15px;line-height:1.45}
+#shpanel{display:none;position:absolute;z-index:5;top:0;right:0;bottom:0;left:0;overflow:auto;background:rgba(10,10,12,.98);padding:calc(env(safe-area-inset-top) + 16px) 16px 24px}
+#shpanel h2{margin:4px 0 6px;font-size:20px}
+#shpanel p{margin:0 0 14px;color:#a5a5b0;font-size:14px;line-height:1.4}
+#shpanel .row{display:flex;gap:8px;margin:10px 0}
+#shpanel input{flex:1;min-width:0}
+#shpanel button.b.pri{background:#7cb4ff;color:#06121f;font-weight:600}
+#shchips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.chip{font:inherit;font-size:14px;color:#f2f2f4;background:#232329;border:1px solid #33333b;border-radius:18px;padding:8px 14px}
+.chip.on{background:#7cb4ff;color:#06121f;border-color:#7cb4ff;font-weight:600}
+#shcount{color:#a5a5b0;font-size:13px}
 #opts{flex-basis:100%;display:flex;gap:20px;padding:0 2px;font-size:14px;color:#c8c8d0}
 #opts label{display:flex;align-items:center;gap:6px}
 #vsave{bottom:calc(env(safe-area-inset-bottom) + 12px);left:12px}
@@ -40,38 +59,6 @@ select{flex:0 0 auto;max-width:42%}
 #vprev{left:10px;top:50%}
 #vnext{right:10px;top:50%}
 #vcount{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:0;right:0;text-align:center;color:#ddd;font-size:14px;pointer-events:none}
-
-#gplay{background:#3a2b63;color:#fff;border:0;border-radius:10px;padding:6px 12px;font:inherit;font-size:14px}
-.gov{position:fixed;top:0;right:0;bottom:0;left:0;display:none}
-#gsetup{z-index:30;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;overflow:auto}
-.gpanel{width:100%;max-width:520px;margin:calc(env(safe-area-inset-top) + 12px) 10px 24px;padding:16px;border-radius:16px;background:#16161a;border:1px solid #2a2a31}
-.gpanel h2{margin:0 0 6px;font-size:20px}
-.gpanel .gl{display:block;margin:14px 0 6px;color:#c8c8d0;font-size:14px}
-.gpanel textarea{width:100%;font:inherit;color:#f2f2f2;background:#232329;border:1px solid #33333b;border-radius:10px;padding:10px 12px;outline:none;resize:vertical}
-.gpanel input[type=checkbox]{flex:none;width:18px;height:18px;padding:0}
-.gpanel input[type=range]{width:100%;padding:0}
-.gpanel label.gc{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:15px}
-.grow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
-.gpanel button,#gpause button,#gsum button{background:#2a2a32;color:#fff;border:0;border-radius:12px;padding:11px 16px;font:inherit}
-.gpanel button.pri,#gpause button.pri,#gsum button.pri{background:#6b44d6}
-.gnote{margin-top:8px;color:#a5a5b0;font-size:13px;line-height:1.4}
-#game{z-index:40;background:#000;touch-action:manipulation;-webkit-user-select:none;user-select:none}
-#gstage{position:absolute;top:0;right:0;bottom:0;left:0}
-.gimg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .25s}
-.gimg.on{opacity:1}
-#ghud{position:absolute;z-index:3;top:0;left:0;right:0;display:flex;gap:14px;align-items:center;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;font-size:14px;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;background:linear-gradient(#0009,#0000)}
-#ghud span{flex:none}
-#ghud .sp{flex:1}
-#gpausebtn{pointer-events:auto;background:rgba(30,30,34,.85);color:#fff;border:0;border-radius:18px;padding:6px 14px;font:inherit}
-#gbar{position:absolute;z-index:3;left:0;right:0;bottom:0;height:5px;background:#ffffff22}
-#gbarfill{display:block;height:100%;width:0;background:#8a63ff}
-#gbanner{position:absolute;z-index:4;top:22%;left:0;right:0;text-align:center;font-size:26px;font-weight:800;letter-spacing:1px;color:#fff;text-shadow:0 2px 8px #000;pointer-events:none;opacity:0;transition:opacity .3s}
-#gbanner.on{opacity:1}
-#gmid{position:absolute;z-index:4;top:0;left:0;right:0;bottom:0;display:none;align-items:center;justify-content:center;text-align:center;color:#eee;font-size:22px;line-height:1.5;background:#000;padding:24px;white-space:pre-line}
-#gblack{position:absolute;z-index:5;top:0;left:0;right:0;bottom:0;background:#000;display:none}
-#gtarget{position:absolute;z-index:6;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;background:#8a63ff;border:4px solid #fff;display:none;box-shadow:0 0 24px #8a63ff}
-#gpause,#gsum{z-index:8;display:none;position:absolute;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.82);flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;color:#eee;line-height:1.5}
-#gpause button,#gsum button{min-width:200px}
 </style>
 </head>
 <body>
@@ -88,7 +75,7 @@ select{flex:0 0 auto;max-width:42%}
   <div id="opts">
     <label><input type="checkbox" id="ca"> Albums</label>
     <label><input type="checkbox" id="ct" checked> Text-only posts</label>
-    <button id="gplay" type="button">&#9654; Slideshow</button>
+    <button id="shufbtn" type="button">Shuffle</button>
   </div>
 </header>
 <div id="note"></div>
@@ -96,40 +83,21 @@ select{flex:0 0 auto;max-width:42%}
 <div id="msg"></div>
 <div id="more"></div>
 <div id="viewer"><img id="vimg" alt=""><video id="vvid" controls playsinline loop></video><div id="vmsg"></div><a id="vpost" href="#">Open post</a><button id="vclose">&#10005;</button><button id="vsave">Save</button><button id="vsaveall">Save all</button><button id="vprev">&#8249;</button><button id="vnext">&#8250;</button><div id="vcount"></div></div>
-
-<div id="gsetup" class="gov"><div class="gpanel">
-  <h2>Slideshow</h2>
-  <div class="gnote">Full-screen pictures from the communities you pick. Every picture goes through your censor settings (&#9881; in the browser bar) before you see it.</div>
-  <label class="gl" for="gsubs">Communities (comma separated)</label>
-  <textarea id="gsubs" rows="3" placeholder="r/pics, r/earthporn" autocapitalize="none" spellcheck="false"></textarea>
-  <div class="grow"><button id="gimport" type="button">Import my subscriptions</button><label class="gc" style="margin:0"><input type="checkbox" id="gnsfw"> 18+ only</label></div>
-  <div class="gnote" id="gimsg"></div>
-  <label class="gl" for="gsort">Sort</label>
-  <select id="gsort"><option value="hot">Hot</option><option value="new">New</option><option value="top:day">Top today</option><option value="top:week">Top week</option><option value="top:month">Top month</option><option value="top:all">Top all time</option></select>
-  <label class="gl" for="gsec">Time per picture: <b id="gsecv"></b> s</label>
-  <input type="range" id="gsec" min="3" max="60" step="1">
-  <label class="gc"><input type="checkbox" id="ggame"> Game mode (rounds, score, streak)</label>
-  <div id="gopts">
-    <label class="gl" for="gper">Pictures per round: <b id="gperv"></b></label>
-    <input type="range" id="gper" min="3" max="40" step="1">
-    <label class="gc"><input type="checkbox" id="gspeed"> Each round is faster</label>
-    <label class="gl" for="gprog">Censor style between rounds</label>
-    <select id="gprog"><option value="off">Stays as in settings</option><option value="ladder">Gets lighter each round</option><option value="random">Random style each round</option></select>
-    <label class="gc"><input type="checkbox" id="gevents"> Random events (fast, blackout, tap targets, double points)</label>
-    <div class="gnote">A streak counts pictures in a row without pausing or missing a tap target. The censor never turns fully off: the lightest step is still a mosaic.</div>
+<div id="shuf">
+  <div id="shstage"><img id="shimg" alt=""></div>
+  <div id="shtop"><button id="shclose" type="button">&#10005;</button><span class="sp"></span><button id="shsubs" type="button">Subreddits</button><button id="shsave" type="button">Save</button></div>
+  <div id="shcap"></div>
+  <div id="shmsg"></div>
+  <div id="shpanel">
+    <h2>Random pictures</h2>
+    <p>Pick the subreddits to draw from. Pictures come up in random order, one at a time, full screen. Tap or swipe for the next one.</p>
+    <div class="row"><button class="b" id="shload" type="button">Load the subreddits I follow</button></div>
+    <div class="row"><input id="shadd" type="text" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="Add a subreddit, e.g. pics"><button class="b" id="shaddbtn" type="button">Add</button></div>
+    <div id="shchips"></div>
+    <div class="row"><button class="b" id="shall" type="button">Select all</button><button class="b" id="shnone" type="button">Clear</button><span id="shcount" style="align-self:center"></span></div>
+    <div id="shnote" style="color:#e6c27a;font-size:13px;min-height:18px"></div>
+    <div class="row"><button class="b pri" id="shgo" type="button" style="flex:1">Start</button></div>
   </div>
-  <div class="grow"><button id="gcancel" type="button">Cancel</button><button id="gstart" class="pri" type="button">Start</button></div>
-</div></div>
-<div id="game" class="gov">
-  <div id="gstage"></div>
-  <div id="ghud"><span id="grnd"></span><span class="sp"></span><span id="gscore"></span><span id="gstreak"></span><button id="gpausebtn" type="button">&#10074;&#10074;</button></div>
-  <div id="gbanner"></div>
-  <div id="gtarget"></div>
-  <div id="gbar"><i id="gbarfill"></i></div>
-  <div id="gmid"></div>
-  <div id="gblack"></div>
-  <div id="gpause"><div style="font-size:22px">Paused</div><div id="gpmsg" class="gnote"></div><button id="gresume" class="pri" type="button">Resume</button><button id="gskip" type="button">Skip picture</button><button id="gend" type="button">End session</button></div>
-  <div id="gsum"><div style="font-size:24px">Session over</div><div id="gsumtxt"></div><button id="gagain" class="pri" type="button">Play again</button><button id="gclose" type="button">Close</button></div>
 </div>
 <script>
 (function () {
@@ -138,6 +106,7 @@ select{flex:0 0 auto;max-width:42%}
   var state = { src: '', sort: 'hot' };
   var after = null, loading = false, done = false, gen = 0, mode = null;
   var showAlbums = false, showText = true;
+  var jsonOK = null;      // does Reddit's data route work for us? (null = not tried yet)
   try {
     var so = JSON.parse(localStorage.getItem('feed_opts') || 'null');
     if (so) { showAlbums = !!so.albums; showText = so.text !== false; }
@@ -371,7 +340,8 @@ select{flex:0 0 auto;max-width:42%}
     if (!mode) trace.length = 0;
     if (mode === 'html') return getHtml();
     if (mode === 'json') return getJson();
-    return getJson().then(function (r) { mode = 'json'; return r; }, function (e1) {
+    return getJson().then(function (r) { mode = 'json'; jsonOK = true; return r; }, function (e1) {
+      jsonOK = false;
       var jt = trace.join(' | ');
       return getHtml().then(function (r) {
         mode = 'html';
@@ -721,415 +691,240 @@ select{flex:0 0 auto;max-width:42%}
   vprev.addEventListener('click', function () { showAt((vi + vlist.length - 1) % vlist.length); });
   vnext.addEventListener('click', function () { showAt((vi + 1) % vlist.length); });
 
-  // ---------- slideshow / game ----------
-  // Pictures only. Every picture is loaded through the app's censoring proxy like everything else on this page.
-  var GKEY = 'game_cfg', BESTKEY = 'game_best';
-  var LADDER = [
-    { style: 'solid', name: 'Solid' },
-    { style: 'blur', blurs: 9, name: 'Heavy blur' },
-    { style: 'blur', blurs: 5, name: 'Blur' },
-    { style: 'mosaic', pixel: 9, name: 'Big mosaic' },
-    { style: 'mosaic', pixel: 6, name: 'Mosaic' },
-    { style: 'mosaic', pixel: 4, name: 'Small mosaic' }
-  ];
-  var RANDOMS = [
-    { style: 'mosaic', pixel: 7, name: 'Mosaic' },
-    { style: 'blur', blurs: 7, name: 'Blur' },
-    { style: 'solid', name: 'Solid' },
-    { style: 'mannequin', name: 'Mannequin' },
-    { style: 'smooth', name: 'Smooth' }
-  ];
-  var gcfg = { subs: '', sort: 'hot', secs: 8, per: 10, game: true, speed: true, prog: 'off', events: true, nsfw: false };
-  try {
-    var gsv = JSON.parse(localStorage.getItem(GKEY) || 'null');
-    if (gsv) for (var gk in gsv) if (gk in gcfg) gcfg[gk] = gsv[gk];
-  } catch (e) {}
-  var G = null, ov = 'none';          // ov: which full-screen layer owns the back button: none | setup | game
+  // ---------- random pictures, full screen ----------
+  var SORTS = ['hot', 'top:week', 'top:month', 'top:year', 'top:all', 'new'];
+  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, busy: false, open: false };
+  var shuf = $('shuf'), shimg = $('shimg'), shcap = $('shcap'), shmsg = $('shmsg'), shpanel = $('shpanel');
 
-  function A(fn, arg) {
-    try { if (window.Android && window.Android[fn]) window.Android[fn](arg); } catch (e) {}
+  function shLoad() {
+    try {
+      SH.subs = JSON.parse(localStorage.getItem('shuf_subs') || '[]');
+      SH.followed = JSON.parse(localStorage.getItem('shuf_followed') || '[]');
+    } catch (e) {}
   }
-  function show(el, on, disp) { el.style.display = on ? (disp || 'flex') : 'none'; }
-  function bestScore() { try { return parseInt(localStorage.getItem(BESTKEY) || '0', 10) || 0; } catch (e) { return 0; } }
-
-  function parseSubs(text) {
-    var out = [], seen = {};
-    String(text || '').split(/[\s,;]+/).forEach(function (t) {
-      var n = normSrc(t);
-      if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; out.push(n); }
-    });
-    return out;
+  function shStore() {
+    try {
+      localStorage.setItem('shuf_subs', JSON.stringify(SH.subs));
+      localStorage.setItem('shuf_followed', JSON.stringify(SH.followed));
+    } catch (e) {}
+  }
+  function immersive(on) { if (window.Android && window.Android.immersive) window.Android.immersive(on); }
+  function shMsg(t) { shmsg.textContent = t || ''; shmsg.style.display = t ? 'block' : 'none'; }
+  function shuffleArr(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t;
+    }
   }
 
-  // ----- setup screen -----
-  function syncSetup() {
-    $('gsecv').textContent = $('gsec').value;
-    $('gperv').textContent = $('gper').value;
-    show($('gopts'), $('ggame').checked, 'block');
-  }
-  function openSetup() {
-    if (ov !== 'none') return;
-    $('gsubs').value = gcfg.subs || (state.src && /^r\//i.test(state.src) ? state.src : '');
-    $('gsort').value = gcfg.sort; if ($('gsort').value !== gcfg.sort) $('gsort').value = 'hot';
-    $('gsec').value = gcfg.secs; $('gper').value = gcfg.per;
-    $('ggame').checked = !!gcfg.game; $('gspeed').checked = !!gcfg.speed;
-    $('gprog').value = gcfg.prog; $('gevents').checked = !!gcfg.events; $('gnsfw').checked = !!gcfg.nsfw;
-    $('gimsg').textContent = '';
-    syncSetup();
-    show($('gsetup'), true);
-    document.body.style.overflow = 'hidden';
-    ov = 'setup';
-    history.pushState({ g: 1 }, '');
-  }
-  function closeSetup() {
-    if (ov !== 'setup') return;
-    ov = 'none';
-    show($('gsetup'), false);
-    document.body.style.overflow = '';
-    history.back();
-  }
-  function readSetup() {
-    gcfg.subs = $('gsubs').value;
-    gcfg.sort = $('gsort').value;
-    gcfg.secs = Math.max(3, parseInt($('gsec').value, 10) || 8);
-    gcfg.per = Math.max(3, parseInt($('gper').value, 10) || 10);
-    gcfg.game = $('ggame').checked; gcfg.speed = $('gspeed').checked;
-    gcfg.prog = $('gprog').value; gcfg.events = $('gevents').checked; gcfg.nsfw = $('gnsfw').checked;
-    try { localStorage.setItem(GKEY, JSON.stringify(gcfg)); } catch (e) {}
-  }
-  function importSubs() {
-    var m = $('gimsg');
-    m.textContent = 'Loading your subscriptions...';
-    getText('/subreddits/mine/subscriber.json?limit=100&raw_json=1', 'json').then(function (r) {
-      if (!okR(r)) throw HttpErr(r.status, r.body);
-      var j = JSON.parse(r.body), ch = (j.data && j.data.children) || [], only = $('gnsfw').checked;
-      var names = ch.filter(function (c) {
-        return c.data && c.data.display_name && !/^u_/i.test(c.data.display_name) && (!only || c.data.over18);
-      }).map(function (c) { return 'r/' + c.data.display_name; });
-      if (!names.length) { m.textContent = 'No subscriptions found. Are you logged in? You can also type communities above.'; return; }
-      $('gsubs').value = names.join(', ');
-      m.textContent = names.length + ' communities added. Delete the ones you do not want.';
-    }).catch(function (e) {
-      m.textContent = "Couldn't load them (" + friendly(e) + '). You can type communities above instead.';
-    });
-  }
-
-  // ----- picture supply -----
-  function gListPath(sub, sort, aft) {
+  function shPaths(sub, sort, aft) {
     var p = sort.split(':'), s = p[0], t = p[1];
-    var isUser = /^user\//i.test(sub);
-    var base = isUser ? '/' + sub + '/submitted.json' : '/' + sub + '/' + s + '.json';
-    var ps = ['raw_json=1', 'limit=50'];
-    if (isUser) ps.push('sort=' + s);
-    if (t) ps.push('t=' + t);
-    if (aft) ps.push('after=' + encodeURIComponent(aft));
-    return base + '?' + ps.join('&');
-  }
-  function gFetchSub(s) {
-    s.busy = true; G.inflight++;
-    var me = G;
-    return getText(gListPath(s.name, G.cfg.sort, s.after), 'json').then(function (r) {
-      if (r.status < 200 || r.status >= 300) throw HttpErr(r.status, r.body);
-      var j = JSON.parse(r.body), ch = (j && j.data && j.data.children) || [];
-      if (me !== G) return;
-      ch.forEach(function (c) {
-        if (c.kind !== 't3' || !c.data || c.data.stickied) return;
-        var info = pics(c.data);
-        if (info.video || !info.list.length) return;      // pictures only
-        var u = info.list[0].u;
-        if (G.seen[u]) return;
-        G.seen[u] = 1;
-        s.items.push({ u: u });
-      });
-      s.after = j.data ? j.data.after : null;
-      if (!s.after) s.done = true;
-    }).catch(function (e) {
-      if (me !== G) return;
-      s.fails++; s.err = friendly(e);
-      if (s.fails >= 2) s.done = true;
-    }).then(function () { if (me === G) { s.busy = false; G.inflight--; } });
-  }
-  function gStock() { var n = 0; G.subs.forEach(function (s) { n += s.items.length; }); return n; }
-  function gFill() {
-    if (!G || G.inflight >= 2 || gStock() >= 14) return;
-    var c = G.subs.filter(function (s) { return !s.done && !s.busy; });
-    if (!c.length) return;
-    c.sort(function (a, b) { return a.items.length - b.items.length; });
-    gFetchSub(c[0]);
-  }
-  function gTake() {
-    var c = G.subs.filter(function (s) { return s.items.length; });
-    if (!c.length) return null;
-    var s = c[Math.floor(Math.random() * c.length)];
-    var i = Math.floor(Math.random() * s.items.length);
-    return s.items.splice(i, 1)[0];
-  }
-  function gPreload(it) {
-    var im = new Image();
-    it.el = im;
-    im.decoding = 'async';
-    im.onload = function () {
-      var d = im.decode ? im.decode() : Promise.resolve();
-      d.then(function () { it.ready = true; }, function () { it.ready = true; });
+    return {
+      json: '/r/' + sub + '/' + s + '.json?raw_json=1&limit=50' + (t ? '&t=' + t : '') +
+            (aft ? '&after=' + encodeURIComponent(aft) : ''),
+      html: '/r/' + sub + '/' + (s === 'hot' ? '' : s + '/') + '?limit=100' + (t ? '&t=' + t : '') +
+            (aft ? '&count=100&after=' + encodeURIComponent(aft) : '')
     };
-    im.onerror = function () { it.bad = true; };
-    im.src = it.u;
   }
-  function gTopUp() {
-    var remain = G.cfg.game ? G.cfg.per - G.shown : 99;
-    while (G.q.length < Math.min(2, remain)) {
-      var it = gTake();
-      if (!it) { gFill(); return; }
-      gPreload(it);
-      G.q.push(it);
+  function shFetch(sub, sort, aft) {
+    var pa = shPaths(sub, sort, aft);
+    function viaJson() {
+      return getText(pa.json, 'json').then(function (r) {
+        if (!okR(r)) throw new Error('HTTP ' + r.status);
+        var j = JSON.parse(r.body);
+        var ch = (j && j.data && j.data.children) || [];
+        return {
+          items: ch.filter(function (c) { return c.kind === 't3' && c.data && !c.data.stickied; })
+                   .map(function (c) { return c.data; }),
+          after: j.data ? j.data.after : null
+        };
+      });
     }
-  }
-
-  // ----- clock that stands still while paused -----
-  function gnow() {
-    var n = performance.now();
-    return n - G.pausedTotal - (G.paused ? n - G.pauseStart : 0);
-  }
-
-  // ----- screen bits -----
-  function gMid(text) { var m = $('gmid'); m.textContent = text || ''; show(m, !!text); }
-  function gBanner(text, ms) {
-    var b = $('gbanner');
-    b.textContent = text; b.classList.add('on');
-    clearTimeout(G.bt);
-    G.bt = setTimeout(function () { b.classList.remove('on'); }, ms || 1400);
-  }
-  function gHud() {
-    var g = G.cfg.game;
-    $('grnd').textContent = g ? 'Round ' + G.round + '  ' + Math.min(G.shown, G.cfg.per) + '/' + G.cfg.per : '#' + G.total;
-    $('gscore').textContent = g ? G.score + ' pts' : '';
-    $('gstreak').textContent = g ? 'Streak ' + G.streak : '';
-  }
-
-  // ----- events -----
-  function gEventClear() {
-    if (G.ev && G.ev.type === 'tap' && G.ev.shown && !G.ev.hit) { G.streak = 0; }
-    G.ev = null;
-    show($('gblack'), false);
-    show($('gtarget'), false);
-  }
-  function gEventRoll() {
-    gEventClear();
-    if (!(G.cfg.game && G.cfg.events) || G.shown < 2 || Math.random() > 0.25) return;
-    var t = ['fast', 'dark', 'tap', 'bonus'][Math.floor(Math.random() * 4)];
-    if (t === 'fast') { G.dur = Math.max(2000, G.dur / 2); gBanner('FAST'); G.ev = { type: 'fast' }; }
-    else if (t === 'bonus') { gBanner('DOUBLE POINTS'); G.ev = { type: 'bonus' }; }
-    else if (t === 'dark') G.ev = { type: 'dark', at: G.t0 + G.dur * 0.35, len: 1500, on: false };
-    else G.ev = { type: 'tap', at: G.t0 + G.dur * (0.15 + Math.random() * 0.35), len: 2300, shown: false, hit: false };
-  }
-  function gEventTick(now) {
-    var e = G.ev;
-    if (!e) return;
-    if (e.type === 'dark') {
-      if (!e.on && now >= e.at) { e.on = true; show($('gblack'), true, 'block'); }
-      else if (e.on && now >= e.at + e.len) { show($('gblack'), false); G.ev = null; }
-    } else if (e.type === 'tap') {
-      var t = $('gtarget');
-      if (!e.shown && now >= e.at) {
-        e.shown = true;
-        t.style.left = (15 + Math.random() * 70) + '%';
-        t.style.top = (22 + Math.random() * 56) + '%';
-        show(t, true, 'block');
-      } else if (e.shown && !e.hit && now >= e.at + e.len) {
-        show(t, false); G.streak = 0; gBanner('MISSED'); G.ev = null;
-      }
+    function viaHtml() {
+      return getText(pa.html, 'html').then(function (r) {
+        if (!okR(r)) throw new Error('HTTP ' + r.status);
+        var res = parseHtml(r.body);
+        if (!res.items.length) throw new Error('empty');
+        return res;
+      });
     }
-  }
-  function gTapTarget(ev) {
-    if (!G || !G.ev || G.ev.type !== 'tap' || !G.ev.shown || G.ev.hit) return;
-    ev.stopPropagation();
-    G.ev.hit = true; G.score += 50; show($('gtarget'), false); gBanner('+50');
+    if (jsonOK === false) return viaHtml();
+    return viaJson().then(function (r) { jsonOK = true; return r; }, function () { jsonOK = false; return viaHtml(); });
   }
 
-  // ----- the round / picture flow -----
-  function gScoreImage() {
-    if (!G.cfg.game || G.counted) return;
-    G.counted = true;
-    G.streak++;
-    if (G.streak > G.bestStreak) G.bestStreak = G.streak;
-    var mult = 1 + 0.25 * (G.round - 1);
-    var dbl = G.ev && G.ev.type === 'bonus' ? 2 : 1;
-    G.score += Math.round((G.dur / 1000) * 10 * mult * dbl) + Math.min(G.streak, 50);
-  }
-  function gDisplay(it) {
-    var stage = $('gstage'), old = G.cur;
-    it.el.className = 'gimg';
-    stage.appendChild(it.el);
-    requestAnimationFrame(function () { it.el.classList.add('on'); });
-    if (old && old.el) {
-      var oe = old.el;
-      oe.classList.remove('on');
-      setTimeout(function () { if (oe.parentNode) oe.parentNode.removeChild(oe); }, 400);
+  // keeps a pile of upcoming pictures: random subreddit, random sort, sometimes deeper pages
+  function shRefill() {
+    if (SH.busy || !SH.subs.length) return Promise.resolve();
+    SH.busy = true;
+    var tries = 0;
+    function one() {
+      if (SH.pool.length >= 10 || tries >= 6) return Promise.resolve();
+      tries++;
+      var sub = SH.subs[Math.floor(Math.random() * SH.subs.length)];
+      var sort = SORTS[Math.floor(Math.random() * SORTS.length)];
+      var key = sub + '|' + sort;
+      var cur = SH.cursors[key];
+      if (cur === false) return one();                       // that listing has run out
+      return shFetch(sub, sort, cur || null).then(function (res) {
+        SH.cursors[key] = res.after || false;
+        res.items.forEach(function (d) {
+          var info = pics(d);
+          if (info.video || info.total > 0 || info.album || !info.list.length) return;   // single pictures only
+          var u = info.list[0], full = u.full || u.u;
+          if (SH.seen[full]) return;
+          SH.seen[full] = 1;
+          SH.pool.push({ u: u.u, full: full, title: d.title || '', sub: sub });
+        });
+        shuffleArr(SH.pool);
+        return one();
+      }, function () { return one(); });
     }
-    G.cur = it; G.shown++; G.total++;
-    G.t0 = gnow(); G.dur = G.secs * 1000; G.counted = false; G.state = 'showing';
-    gMid('');
-    gEventRoll();
-    gTopUp();
+    return one().then(function () { SH.busy = false; }, function () { SH.busy = false; });
   }
-  function gAdvance() {
-    if (G.state === 'showing') gScoreImage();
-    if (G.cfg.game && G.shown >= G.cfg.per) return gEndRound();
-    gTopUp();
-    while (G.q.length && G.q[0].bad) { G.q.shift(); gTopUp(); }
-    var it = G.q[0];
-    if (!it || !it.ready) {
-      if (G.state === 'showing') G.state = 'waiting';
-      if (!G.cur && G.state !== 'between') G.state = 'waiting';
-      var dead = G.subs.every(function (s) { return s.done && !s.items.length; }) && !G.q.length;
-      if (dead) return gFinish(true);
+
+  function shShow(it) {
+    shMsg('');
+    shimg.style.opacity = 0;
+    shimg.onload = function () { shimg.style.opacity = 1; };
+    shimg.onerror = function () { if (SH.open) shNext(); };
+    shimg.src = it.u;
+    shcap.textContent = 'r/' + it.sub + (it.title ? '  \u00B7  ' + it.title : '');
+    var nx = SH.pool[0];
+    if (nx) { var pre = new Image(); pre.src = nx.u; }       // warm up the next one
+  }
+  function shNext() {
+    if (SH.idx < SH.hist.length - 1) { SH.idx++; shShow(SH.hist[SH.idx]); return; }
+    if (!SH.pool.length) {
+      shMsg('Finding pictures...');
+      shRefill().then(function () {
+        if (!SH.open) return;
+        if (SH.pool.length) shNext();
+        else shMsg("Couldn't find any pictures. Check the subreddits, or log in on the normal site first.");
+      });
       return;
     }
-    G.q.shift();
-    gDisplay(it);
+    var it = SH.pool.shift();
+    SH.hist.push(it);
+    if (SH.hist.length > 200) { SH.hist.shift(); }
+    SH.idx = SH.hist.length - 1;
+    shShow(it);
+    if (SH.pool.length < 5) shRefill();
   }
-  function gLevel() {
-    if (!G.cfg.game || G.cfg.prog === 'off') return '';
-    var p = G.cfg.prog === 'ladder' ? LADDER[Math.min(G.round - 1, LADDER.length - 1)]
-                                    : RANDOMS[Math.floor(Math.random() * RANDOMS.length)];
-    A('gameLevel', JSON.stringify(p));
-    return p.name;
+  function shPrev() { if (SH.idx > 0) { SH.idx--; shShow(SH.hist[SH.idx]); } }
+
+  // ----- choosing subreddits
+  function shNote(t) { $('shnote').textContent = t || ''; }
+  function renderPicker() {
+    var all = {};
+    SH.followed.concat(SH.subs).forEach(function (n) { all[n] = 1; });
+    var names = Object.keys(all).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+    var box = $('shchips');
+    box.innerHTML = '';
+    names.forEach(function (n) {
+      var c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'chip' + (SH.subs.indexOf(n) >= 0 ? ' on' : '');
+      c.textContent = 'r/' + n;
+      c.addEventListener('click', function () {
+        var i = SH.subs.indexOf(n);
+        if (i >= 0) SH.subs.splice(i, 1); else SH.subs.push(n);
+        shStore(); renderPicker();
+      });
+      box.appendChild(c);
+    });
+    $('shcount').textContent = SH.subs.length + ' selected';
   }
-  function gBeginRound(first) {
-    var lvl = gLevel();
-    G.shown = 0; G.q = [];
-    if (G.cur && G.cur.el && G.cur.el.parentNode) G.cur.el.parentNode.removeChild(G.cur.el);
-    G.cur = null;
-    G.state = 'between';
-    G.midUntil = gnow() + (G.cfg.game ? 2600 : 600);
-    if (G.cfg.game) {
-      gMid('Round ' + G.round + '\n' + (Math.round(G.secs * 10) / 10) + ' s per picture' + (lvl ? '\n' + lvl : '') +
-           (first ? '\n\nBest score: ' + bestScore() : ''));
-    } else gMid('Loading...');
-    gTopUp();
-  }
-  function gEndRound() {
-    gEventClear();
-    G.rounds++;
-    G.round++;
-    if (G.cfg.speed) G.secs = Math.max(3, G.secs * 0.9);
-    if (G.score > bestScore()) { try { localStorage.setItem(BESTKEY, String(G.score)); } catch (e) {} }
-    gBeginRound(false);
-  }
-  function gTick() {
-    if (!G || G.state === 'over') return;
-    gFill();
-    if (G.paused) return;
-    var now = gnow();
-    if (G.state === 'between') gTopUp();       // start loading during the "Round N" screen
-    if (G.state === 'between') {
-      if (now >= G.midUntil) gAdvance();
-    } else if (G.state === 'waiting') {
-      gAdvance();
-    } else if (G.state === 'showing') {
-      gEventTick(now);
-      $('gbarfill').style.width = Math.min(100, ((now - G.t0) / G.dur) * 100) + '%';
-      if (now - G.t0 >= G.dur) gAdvance();
+  function showPicker() { shpanel.style.display = 'block'; renderPicker(); }
+
+  function shLoadFollowed() {
+    var names = {}, pages = 0;
+    shNote('Reading your followed subreddits...');
+    function page(aft) {
+      var path = '/subreddits/mine/subscriber/?limit=100' + (aft ? '&count=100&after=' + encodeURIComponent(aft) : '');
+      return getText(path, 'raw').then(function (r) {
+        if (!okR(r)) throw new Error('HTTP ' + r.status);
+        var d = new DOMParser().parseFromString(r.body, 'text/html');
+        var root = d.querySelector('#siteTable') || d.body;
+        var as = root.querySelectorAll('a[href]');
+        for (var i = 0; i < as.length; i++) {
+          var m = /\/r\/([A-Za-z0-9_]{2,21})\/?$/.exec(as[i].getAttribute('href') || '');
+          if (m && as[i].classList.contains('title')) names[m[1]] = 1;
+        }
+        var next = d.querySelector('.next-button a'), na = null;
+        if (next) { var mm = /[?&]after=([^&]+)/.exec(next.getAttribute('href') || ''); if (mm) na = decodeURIComponent(mm[1]); }
+        pages++;
+        if (na && pages < 5) return page(na);
+      });
     }
-    if (G.state === 'waiting' && !G.cur) gMid('Loading...');
-    gHud();
+    page(null).then(function () {
+      var list = Object.keys(names);
+      if (!list.length) { shNote("Couldn't find any followed subreddits. Log in on the normal site first, or add some by name."); return; }
+      SH.followed = list;
+      shStore(); renderPicker();
+      shNote(list.length + ' followed subreddits found. Tap the ones you want.');
+    }, function (e) { shNote("Couldn't read your followed list (" + (e.message || 'error') + "). Log in first, or add subreddits by name."); });
+  }
+  function shAddName() {
+    var v = normSrc($('shadd').value);
+    if (!/^r\//i.test(v)) { shNote('Type a subreddit name, like pics'); return; }
+    var n = v.slice(2);
+    if (SH.subs.indexOf(n) < 0) SH.subs.push(n);
+    $('shadd').value = '';
+    shNote(''); shStore(); renderPicker();
   }
 
-  // ----- pause / end -----
-  function gPause() {
-    if (!G || G.paused || G.state === 'over') return;
-    G.paused = true; G.pauseStart = performance.now();
-    if (G.cfg.game && G.streak) { G.streak = 0; $('gpmsg').textContent = 'Pausing reset your streak.'; }
-    else $('gpmsg').textContent = '';
-    gHud();
-    show($('gpause'), true);
+  function shStart() {
+    shpanel.style.display = 'none';
+    if (!SH.subs.length) { showPicker(); shNote('Pick at least one subreddit.'); return; }
+    SH.pool = []; SH.hist = []; SH.idx = -1; SH.cursors = {}; SH.seen = {};
+    shMsg('Finding pictures...');
+    shNext();
   }
-  function gResume() {
-    if (!G || !G.paused) return;
-    G.pausedTotal += performance.now() - G.pauseStart;
-    G.paused = false;
-    show($('gpause'), false);
+  function openShuffle() {
+    shLoad();
+    SH.open = true;
+    shuf.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    immersive(true);
+    history.pushState({ shuf: 1 }, '');                     // so the phone's back button closes it
+    if (SH.subs.length) shStart(); else showPicker();
   }
-  function gSkip() {
-    if (!G) return;
-    gResume();
-    if (G.state === 'showing') { G.counted = true; G.t0 = gnow() - G.dur; }
-  }
-  function gFinish(noMore) {
-    if (!G || G.state === 'over') return;
-    gEventClear();
-    clearInterval(G.int);
-    G.state = 'over'; G.paused = false;
-    show($('gpause'), false); show($('gmid'), false);
-    if (G.cur && G.cur.el && G.cur.el.parentNode) G.cur.el.parentNode.removeChild(G.cur.el);
-    A('gameEnd'); A('fullscreen', false);
-    if (G.cfg.game && G.score > bestScore()) { try { localStorage.setItem(BESTKEY, String(G.score)); } catch (e) {} }
-    var t = G.total + ' picture' + (G.total === 1 ? '' : 's') + ' shown';
-    if (G.cfg.game) t += '\n' + G.rounds + ' round' + (G.rounds === 1 ? '' : 's') + ' completed\nBest streak ' + G.bestStreak +
-                         '\nScore ' + G.score + '\nBest ever ' + bestScore();
-    if (noMore) {
-      var errs = G.subs.map(function (s) { return s.err; }).filter(Boolean);
-      t += '\n\nNo more pictures to show.' + (errs.length ? '\n' + errs[0] : '');
-    }
-    $('gsumtxt').textContent = t;
-    show($('gsum'), true);
-  }
-  function closeGame(fromPop) {
-    if (ov !== 'game') return;
-    ov = 'none';
-    if (G && G.state !== 'over') { clearInterval(G.int); A('gameEnd'); A('fullscreen', false); }
-    $('gstage').innerHTML = '';
-    show($('game'), false); show($('gsum'), false); show($('gpause'), false);
+  function closeShuffle(fromPop) {
+    if (!SH.open) return;
+    SH.open = false;
+    shuf.style.display = 'none';
+    shpanel.style.display = 'none';
     document.body.style.overflow = '';
-    G = null;
+    shimg.removeAttribute('src');
+    immersive(false);
     if (!fromPop) history.back();
   }
+  window.addEventListener('popstate', function () { if (SH.open) closeShuffle(true); });
 
-  function gStart() {
-    readSetup();
-    var names = parseSubs(gcfg.subs);
-    if (!names.length) { $('gimsg').textContent = 'Add at least one community first (or import your subscriptions).'; return; }
-    G = {
-      cfg: JSON.parse(JSON.stringify(gcfg)),
-      subs: names.map(function (n) { return { name: n, after: null, done: false, busy: false, fails: 0, items: [], err: '' }; }),
-      seen: {}, q: [], cur: null, inflight: 0,
-      round: 1, rounds: 0, shown: 0, total: 0, secs: gcfg.secs, score: 0, streak: 0, bestStreak: 0,
-      paused: false, pausedTotal: 0, pauseStart: 0, state: 'between', midUntil: 0, t0: 0, dur: 0, ev: null, counted: false
-    };
-    $('gstage').innerHTML = '';
-    $('gbarfill').style.width = '0';
-    show($('gsetup'), false);
-    show($('gsum'), false); show($('gpause'), false);
-    show($('game'), true);
-    ov = 'game';                                   // the page state pushed by openSetup now belongs to the game
-    A('fullscreen', true);
-    gFill();
-    gBeginRound(true);
-    G.int = setInterval(gTick, 100);
-  }
-
-  $('gplay').addEventListener('click', openSetup);
-  $('gcancel').addEventListener('click', closeSetup);
-  $('gstart').addEventListener('click', gStart);
-  $('gimport').addEventListener('click', importSubs);
-  ['gsec', 'gper', 'ggame'].forEach(function (id) { $(id).addEventListener('input', syncSetup); $(id).addEventListener('change', syncSetup); });
-  $('gpausebtn').addEventListener('click', gPause);
-  $('gresume').addEventListener('click', gResume);
-  $('gskip').addEventListener('click', gSkip);
-  $('gend').addEventListener('click', function () { gResume(); gFinish(false); });
-  $('gagain').addEventListener('click', function () { closeGame(true); history.back(); setTimeout(openSetup, 250); });
-  $('gclose').addEventListener('click', function () { closeGame(false); });
-  $('gtarget').addEventListener('click', gTapTarget);
-  $('gtarget').addEventListener('touchstart', gTapTarget, { passive: true });
-  document.addEventListener('visibilitychange', function () { if (document.hidden && ov === 'game' && G && G.state !== 'over') gPause(); });
-  window.addEventListener('popstate', function () {
-    if (ov === 'setup') { ov = 'none'; show($('gsetup'), false); document.body.style.overflow = ''; }
-    else if (ov === 'game') {
-      if (G && G.state === 'over') closeGame(true);
-      else { history.pushState({ g: 1 }, ''); gPause(); }
-    }
+  var stx = 0, sty = 0, swiped = false;
+  shuf.addEventListener('touchstart', function (e) {
+    var t = e.touches[0]; stx = t.clientX; sty = t.clientY; swiped = false;
+  }, { passive: true });
+  shuf.addEventListener('touchend', function (e) {
+    var t = e.changedTouches[0], dx = t.clientX - stx, dy = t.clientY - sty;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { swiped = true; if (dx < 0) shNext(); else shPrev(); }
+  }, { passive: true });
+  $('shstage').addEventListener('click', function (e) {
+    if (swiped) { swiped = false; return; }
+    if (e.clientX / window.innerWidth < 0.3) shPrev(); else shNext();
   });
-  window.__openGame = openSetup;
+  $('shclose').addEventListener('click', function () { closeShuffle(false); });
+  $('shsubs').addEventListener('click', showPicker);
+  $('shsave').addEventListener('click', function () { var it = SH.hist[SH.idx]; if (it) doSave([it.full]); });
+  $('shufbtn').addEventListener('click', openShuffle);
+  $('shload').addEventListener('click', shLoadFollowed);
+  $('shaddbtn').addEventListener('click', shAddName);
+  $('shadd').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); shAddName(); } });
+  $('shall').addEventListener('click', function () {
+    var all = {}; SH.followed.concat(SH.subs).forEach(function (n) { all[n] = 1; });
+    SH.subs = Object.keys(all); shStore(); renderPicker();
+  });
+  $('shnone').addEventListener('click', function () { SH.subs = []; shStore(); renderPicker(); });
+  $('shgo').addEventListener('click', shStart);
 
   q.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); q.blur(); go(); }
@@ -1137,21 +932,11 @@ select{flex:0 0 auto;max-width:42%}
   sel.addEventListener('change', go);
   window.addEventListener('scroll', check, { passive: true });
   window.addEventListener('resize', check);
-  // the app's \u25B6 button opens the slideshow by loading  .../__feed#__play
-  function checkPlay() {
-    if (location.hash !== '#__play') return false;
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    return true;
-  }
-  window.addEventListener('hashchange', function () {
-    if (checkPlay()) { openSetup(); return; }
-    readHash(); render();
-  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
 
-  var wantPlay = checkPlay();
   readHash();
   render();
-  if (wantPlay) setTimeout(openSetup, 60);
+  if (/[?&]mode=shuffle/.test(location.search)) openShuffle();
 })();
 </script>
 </body>
