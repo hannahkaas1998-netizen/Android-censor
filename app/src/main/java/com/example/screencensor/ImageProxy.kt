@@ -49,8 +49,10 @@ object ImageProxy {
 
         val video = accept.startsWith("video/") || host == "v.redd.it" ||
             path.endsWith(".mp4") || path.endsWith(".m3u8") || path.endsWith(".mpd") ||
-            path.endsWith(".m4s") || path.endsWith(".webm")
+            path.endsWith(".m4s") || path.endsWith(".webm") || path.endsWith(".m4v") || path.endsWith(".mov")
         if (video) return if (p.getBoolean("blockvideo", true)) blocked() else null
+        // animated GIFs are videos too: with "Block videos" off they play as they are (they can't be censored)
+        if (path.endsWith(".gif") && !p.getBoolean("blockvideo", true)) return null
 
         val isImage = path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
             path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".avif") || path.endsWith(".bmp") ||
@@ -160,7 +162,7 @@ object ImageProxy {
 
     private fun placeholder(): WebResourceResponse {
         val bos = ByteArrayOutputStream()
-        ImageCensor.placeholder(600, 400, "BLOCKED").compress(Bitmap.CompressFormat.PNG, 100, bos)
+        ImageCensor.placeholder(600, 400, "CAN'T LOAD").compress(Bitmap.CompressFormat.PNG, 100, bos)
         return respond("image/png", bos.toByteArray())
     }
 
