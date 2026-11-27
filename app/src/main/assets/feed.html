@@ -750,7 +750,7 @@ select{flex:0 0 auto;max-width:42%}
 
   // ---------- random pictures, full screen ----------
   var SORTS = ['hot', 'top:week', 'top:month', 'top:year', 'top:all', 'new'];
-  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false, shown: 0, dog: null };
+  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false, shown: 0, dog: null, nextAt: 0 };
   var shuf = $('shuf'), shimg = $('shimg'), shcap = $('shcap'), shmsg = $('shmsg'), shpanel = $('shpanel');
 
   function shLoad() {
@@ -776,7 +776,7 @@ select{flex:0 0 auto;max-width:42%}
   function shPaths(sub, sort, aft) {
     var p = sort.split(':'), s = p[0], t = p[1];
     return {
-      json: '/r/' + sub + '/' + s + '.json?raw_json=1&limit=50' + (t ? '&t=' + t : '') +
+      json: '/r/' + sub + '/' + s + '.json?raw_json=1&limit=100' + (t ? '&t=' + t : '') +
             (aft ? '&after=' + encodeURIComponent(aft) : ''),
       html: '/r/' + sub + '/' + (s === 'hot' ? '' : s + '/') + '?limit=100' + (t ? '&t=' + t : '') +
             (aft ? '&count=100&after=' + encodeURIComponent(aft) : '')
@@ -824,7 +824,13 @@ select{flex:0 0 auto;max-width:42%}
     if (!open.length) { SH.fails[sub] = 3; return Promise.resolve(); }      // everything in it has been shown
     var sort = open[Math.floor(Math.random() * open.length)];
     var key = sub + '|' + sort;
-    return shFetch(sub, sort, SH.cursors[key] || null).then(function (res) {
+    // Reddit cuts you off when asked too often (HTTP 429/403), which also breaks logging in:
+    // so fetches go out one at a time, at least 2.5 s apart, and everything pauses for a minute after a refusal
+    var wait = Math.max(0, SH.nextAt - Date.now());
+    SH.nextAt = Math.max(Date.now(), SH.nextAt) + 2500;
+    return new Promise(function (ok) { setTimeout(ok, wait); }).then(function () {
+      return shFetch(sub, sort, SH.cursors[key] || null);
+    }).then(function (res) {
       SH.cursors[key] = res.after || false;
       var q = SH.q[sub] || (SH.q[sub] = []), added = 0;
       res.items.forEach(function (d) {
@@ -838,7 +844,10 @@ select{flex:0 0 auto;max-width:42%}
       });
       shuffleArr(q);
       SH.fails[sub] = added ? 0 : (SH.fails[sub] || 0) + 0.5;
-    }, function () { SH.fails[sub] = (SH.fails[sub] || 0) + 1; });
+    }, function (e) {
+      if (/HTTP (429|403)/.test((e && e.message) || '') || (e && (e.status === 429))) SH.nextAt = Date.now() + 60000;
+      else SH.fails[sub] = (SH.fails[sub] || 0) + 1;
+    });
   }
   // keeps a pile of upcoming pictures (at least [target]) taken from the subreddits in turn
   function shRefill(target) {
@@ -900,7 +909,7 @@ select{flex:0 0 auto;max-width:42%}
     if (SH.hist.length > 200) { SH.hist.shift(); }
     SH.idx = SH.hist.length - 1;
     shShow(it);
-    if (SH.pool.length < 6) shRefill(10);
+    if (SH.pool.length < 3) shRefill(6);
   }
   function shPrev() { if (SH.idx > 0) { SH.idx--; shShow(SH.hist[SH.idx]); } }
 
@@ -1073,7 +1082,7 @@ select{flex:0 0 auto;max-width:42%}
   var RW_EARLY = { stop: 15, slow: 35, medium: 30, fast: 15, super: 5 };
   var RW_LATE = { stop: 2, slow: 5, medium: 16, fast: 35, super: 42 };
   var RLEN = { stop: [3, 10], slow: [6, 25], medium: [6, 25], fast: [6, 22], super: [4, 12] };    // seconds a pace lasts
-  var PBUILD = 'pace build 5';
+  var PBUILD = 'pace build 6';
   var PC = { lv: 'random', rng: '5-10', snd: false, vib: true, csnd: true, voice: false, run: false, t0: 0, dur: 0, last: 0, phase: 0, bpm: 0, target: 0,
              seg: '', segEnd: 0, ended: false, raf: 0, txtAt: 0, ac: null, lastSec: -1 };
   try {
