@@ -750,7 +750,7 @@ select{flex:0 0 auto;max-width:42%}
 
   // ---------- random pictures, full screen ----------
   var SORTS = ['hot', 'top:week', 'top:month', 'top:year', 'top:all', 'new'];
-  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false, shown: 0, dog: null, nextAt: 0 };
+  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false, shown: 0, dog: null, nextAt: 0, waiters: [] };
   var shuf = $('shuf'), shimg = $('shimg'), shcap = $('shcap'), shmsg = $('shmsg'), shpanel = $('shpanel');
 
   function shLoad() {
@@ -810,14 +810,20 @@ select{flex:0 0 auto;max-width:42%}
 
   // Pictures are kept in one queue per subreddit, and the next picture always comes from a subreddit
   // that wasn't used in the last few, so the mix stays varied however big the subreddits are.
-  function pickSub() {
+  function pickSub(urgent) {
     var live = SH.subs.filter(function (x) { return (SH.fails[x] || 0) < 3; });
     if (!live.length) return null;
     var win = Math.min(3, live.length - 1);
     var avoid = win > 0 ? SH.recent.slice(-win) : [];
     var c = live.filter(function (x) { return avoid.indexOf(x) < 0; });
     if (!c.length) c = live;
-    return c[Math.floor(Math.random() * c.length)];
+    var ready = c.filter(function (x) { return (SH.q[x] || []).length > 0; });
+    if (ready.length) return ready[Math.floor(Math.random() * ready.length)];
+    if (urgent) {                                   // nothing varied is ready and a picture is needed now: any ready subreddit will do
+      var any = live.filter(function (x) { return (SH.q[x] || []).length > 0; });
+      if (any.length) return any[Math.floor(Math.random() * any.length)];
+    }
+    return c[Math.floor(Math.random() * c.length)];   // otherwise go and fetch from a subreddit in turn
   }
   function shFetchSub(sub) {
     var open = SORTS.filter(function (x) { return SH.cursors[sub + '|' + x] !== false; });
@@ -825,9 +831,9 @@ select{flex:0 0 auto;max-width:42%}
     var sort = open[Math.floor(Math.random() * open.length)];
     var key = sub + '|' + sort;
     // Reddit cuts you off when asked too often (HTTP 429/403), which also breaks logging in:
-    // so fetches go out one at a time, at least 2.5 s apart, and everything pauses for a minute after a refusal
+    // so fetches go out one at a time, at least 1.5 s apart, and everything pauses for a minute after a refusal
     var wait = Math.max(0, SH.nextAt - Date.now());
-    SH.nextAt = Math.max(Date.now(), SH.nextAt) + 2500;
+    SH.nextAt = Math.max(Date.now(), SH.nextAt) + 1500;
     return new Promise(function (ok) { setTimeout(ok, wait); }).then(function () {
       return shFetch(sub, sort, SH.cursors[key] || null);
     }).then(function (res) {
@@ -845,9 +851,16 @@ select{flex:0 0 auto;max-width:42%}
       shuffleArr(q);
       SH.fails[sub] = added ? 0 : (SH.fails[sub] || 0) + 0.5;
     }, function (e) {
-      if (/HTTP (429|403)/.test((e && e.message) || '') || (e && (e.status === 429))) SH.nextAt = Date.now() + 60000;
-      else SH.fails[sub] = (SH.fails[sub] || 0) + 1;
+      if (/HTTP (429|403)/.test((e && e.message) || '') || (e && (e.status === 429))) {
+        SH.nextAt = Date.now() + 60000;
+        if (SH.waiters.length) shMsg('Reddit asked us to slow down. Waiting a minute...');
+      } else SH.fails[sub] = (SH.fails[sub] || 0) + 1;
     });
+  }
+  // whoever is waiting for a picture is woken as soon as the first one is ready (not when the whole refill is done)
+  function shWake() {
+    var w = SH.waiters; SH.waiters = [];
+    w.forEach(function (f) { try { f(); } catch (e) {} });
   }
   // keeps a pile of upcoming pictures (at least [target]) taken from the subreddits in turn
   function shRefill(target) {
@@ -855,21 +868,28 @@ select{flex:0 0 auto;max-width:42%}
     if (!SH.subs.length) return Promise.resolve();
     var tries = 0;
     function one() {
-      if (SH.pool.length >= target || tries >= 40) return Promise.resolve();
+      if (!SH.open || SH.pool.length >= target || tries >= 40) return Promise.resolve();
       tries++;
-      var sub = pickSub();
+      var sub = pickSub(SH.pool.length === 0);
       if (!sub) return Promise.resolve();
       var q = SH.q[sub] || (SH.q[sub] = []);
       if (q.length) {
         SH.pool.push(q.shift());
         SH.recent.push(sub);
         if (SH.recent.length > 30) SH.recent.shift();
+        shWake();
         return one();
       }
       return shFetchSub(sub).then(one, one);
     }
-    SH.busy = one().then(function () { SH.busy = null; }, function () { SH.busy = null; });
+    SH.busy = one().then(function () { SH.busy = null; shDone(); }, function () { SH.busy = null; shDone(); });
     return SH.busy;
+  }
+  function shDone() {                                 // a refill ended: if someone is still waiting and nothing came, say so
+    if (!SH.waiters.length) return;
+    if (SH.pool.length) { shWake(); return; }
+    SH.waiters = [];
+    if (SH.open) shMsg("Couldn't find any pictures. Check the subreddits, or log in on the normal site first.");
   }
 
   function shShow(it) {
@@ -897,11 +917,8 @@ select{flex:0 0 auto;max-width:42%}
     if (SH.idx < SH.hist.length - 1) { SH.idx++; shShow(SH.hist[SH.idx]); return; }
     if (!SH.pool.length) {
       shMsg('Finding pictures...');
-      shRefill(1).then(function () {
-        if (!SH.open) return;
-        if (SH.pool.length) shNext();
-        else shMsg("Couldn't find any pictures. Check the subreddits, or log in on the normal site first.");
-      });
+      SH.waiters.push(function () { if (SH.open) shNext(); });
+      shRefill(6);
       return;
     }
     var it = SH.pool.shift();
@@ -1088,7 +1105,7 @@ select{flex:0 0 auto;max-width:42%}
   var RW_EARLY = { stop: 15, slow: 35, medium: 30, fast: 15, super: 5 };
   var RW_LATE = { stop: 2, slow: 5, medium: 16, fast: 35, super: 42 };
   var RLEN = { stop: [3, 10], slow: [6, 25], medium: [6, 25], fast: [6, 22], super: [4, 12] };    // seconds a pace lasts
-  var PBUILD = 'pace build 7';
+  var PBUILD = 'pace build 8';
   var PC = { lv: 'random', rng: '5-10', snd: false, vib: true, csnd: true, voice: false, run: false, t0: 0, dur: 0, last: 0, phase: 0, bpm: 0, target: 0,
              seg: '', segEnd: 0, ended: false, raf: 0, txtAt: 0, ac: null, lastSec: -1 };
   try {
