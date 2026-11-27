@@ -1,62 +1,94 @@
 package com.example.screencensor
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.content.SharedPreferences
-import android.widget.ScrollView
-import android.widget.Toast
-import org.json.JSONArray
-import org.json.JSONTokener
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.Dialog
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
+import android.view.Gravity
 import android.view.View
-import android.view.WindowInsets
-import android.view.WindowManager
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.*
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import org.json.JSONArray
+import org.json.JSONTokener
 
 class BrowserActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var urlBox: EditText
-    private lateinit var bridge: FeedBridge
     private lateinit var bar: LinearLayout
+    private lateinit var bridge: FeedBridge
     private var ua: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        window.statusBarColor = Ui.CARD
+        window.navigationBarColor = Ui.BG
         val p = getSharedPreferences("cfg", MODE_PRIVATE)
         Thread { try { ImageProxy.warm(this) } catch (_: Throwable) {} }.start()
 
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(8, 8, 8, 8) }
-        val back = Button(this).apply { text = "<"; setOnClickListener { if (web.canGoBack()) web.goBack() } }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Ui.BG)
+        }
+        bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Ui.CARD)
+            setPadding(Ui.dp(this@BrowserActivity, 8), Ui.dp(this@BrowserActivity, 6), Ui.dp(this@BrowserActivity, 8), Ui.dp(this@BrowserActivity, 6))
+        }
+
+        fun pill(label: String, onClick: () -> Unit): TextView = TextView(this).apply {
+            text = label
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setTextColor(Ui.TEXT)
+            background = Ui.rounded(this@BrowserActivity, Ui.CARD2, 10)
+            minimumWidth = Ui.dp(this@BrowserActivity, 40)
+            minimumHeight = Ui.dp(this@BrowserActivity, 40)
+            setPadding(Ui.dp(this@BrowserActivity, 10), 0, Ui.dp(this@BrowserActivity, 10), 0)
+            isClickable = true
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = Ui.dp(this@BrowserActivity, 4)
+            }
+        }
+
         urlBox = EditText(this).apply {
             setSingleLine(true)
             inputType = InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            textSize = 14f
+            setTextColor(Ui.TEXT)
+            setHintTextColor(Ui.MUTED)
+            hint = "Search or type a web address"
+            background = Ui.rounded(this@BrowserActivity, Ui.CARD2, 10)
+            setPadding(Ui.dp(this@BrowserActivity, 12), Ui.dp(this@BrowserActivity, 9), Ui.dp(this@BrowserActivity, 12), Ui.dp(this@BrowserActivity, 9))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                leftMargin = Ui.dp(this@BrowserActivity, 6)
+            }
             setOnEditorActionListener { _, _, _ -> load(text.toString()); true }
         }
-        val saveBtn = Button(this).apply { text = "\u2B07"; setOnClickListener { collectAndSave() } }
-        val feedBtn = Button(this).apply { text = "Feed"; setOnClickListener { web.loadUrl(FEED) } }
-        val gear = Button(this).apply { text = "\u2699"; setOnClickListener { openSettings(p) } }
-        val playBtn = Button(this).apply { text = "\u25B6"; setOnClickListener { web.loadUrl(FEED + "#__play") } }
-        bar.addView(back)
+
+        bar.addView(pill("\u2039") { if (web.canGoBack()) web.goBack() })
         bar.addView(urlBox)
-        bar.addView(feedBtn)
-        bar.addView(playBtn)
-        bar.addView(gear)
-        bar.addView(saveBtn)
+        bar.addView(pill("Feed") { web.loadUrl(FEED) })
+        bar.addView(pill("\u2699") { openSettings(p) })
+        bar.addView(pill("\u2B07") { collectAndSave() })
 
         web = WebView(this)
+        web.setBackgroundColor(Ui.BG)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.mediaPlaybackRequiresUserGesture = true
@@ -64,9 +96,11 @@ class BrowserActivity : Activity() {
         // look like a normal Chrome browser instead of an embedded WebView
         ua = web.settings.userAgentString.replace("; wv", "").replace(" Version/4.0", "")
         web.settings.userAgentString = ua
-        bridge = FeedBridge(web, ua, p, getSharedPreferences("gamebak", MODE_PRIVATE),
-            { on -> runOnUiThread { setFullscreen(on) } }) { urls -> runOnUiThread { confirmSave(urls) } }
-        bridge.restoreLevels()      // in case a slideshow was cut short last time
+        bridge = FeedBridge(
+            web, ua,
+            { urls -> runOnUiThread { confirmSave(urls) } },
+            { on -> runOnUiThread { setImmersive(on) } }
+        )
         web.addJavascriptInterface(bridge, "Android")
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
@@ -90,8 +124,6 @@ class BrowserActivity : Activity() {
                     urlBox.setText(url)
                     bridge.page = url
                 }
-                bridge.restoreLevels()      // a new page means any slideshow is over
-                setFullscreen(false)
             }
         }
         if (Build.VERSION.SDK_INT >= 24) {
@@ -102,36 +134,28 @@ class BrowserActivity : Activity() {
         }
 
         root.addView(bar)
-        root.addView(web, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        if (intent.getBooleanExtra("play", false)) web.loadUrl(FEED + "#__play")
-        else if (p.getBoolean("feedmode", true)) web.loadUrl(FEED)
-        else load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+
+        when {
+            intent.getBooleanExtra("shuffle", false) -> web.loadUrl("$FEED?mode=shuffle")
+            p.getBoolean("feedmode", true) -> web.loadUrl(FEED)
+            else -> load(p.getString("home", "https://old.reddit.com") ?: "https://old.reddit.com")
+        }
     }
 
     companion object {
         const val FEED = "https://old.reddit.com/__feed"
     }
 
-    /** Slideshow mode: hide the browser bar and the system bars, keep the screen awake. */
-    private fun setFullscreen(on: Boolean) {
+    /** Full screen for the random-pictures view: hides the address bar and the phone's bars. */
+    @Suppress("DEPRECATION")
+    private fun setImmersive(on: Boolean) {
         bar.visibility = if (on) View.GONE else View.VISIBLE
-        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.let {
-                if (on) {
-                    it.hide(WindowInsets.Type.systemBars())
-                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                } else it.show(WindowInsets.Type.systemBars())
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = if (on)
-                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            else View.SYSTEM_UI_FLAG_VISIBLE
-        }
+        window.decorView.systemUiVisibility = if (on) {
+            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        } else View.SYSTEM_UI_FLAG_VISIBLE
     }
 
     /** Finds the pictures on the current page (the ones that have loaded) and offers to save them to Photos. */
@@ -191,17 +215,35 @@ class BrowserActivity : Activity() {
 
     private fun sig(p: SharedPreferences) = p.all.filterKeys { it != "home" }.toString()
 
-    /** Censor settings, right here on top of the browser. The page reloads when you close it if anything changed. */
+    /** Censor settings on top of the browser. The page reloads when you close it if anything changed. */
     private fun openSettings(p: SharedPreferences) {
         val before = sig(p)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 16, 40, 16) }
-        SettingsUi.addSettings(this, root, p)
-        AlertDialog.Builder(this)
-            .setTitle("Censor settings")
-            .setView(ScrollView(this).apply { addView(root) })
-            .setPositiveButton("Done", null)
-            .setOnDismissListener { if (sig(p) != before) web.reload() }
-            .show()
+        val dlg = Dialog(this, android.R.style.Theme_Material_NoActionBar)
+        val pad = Ui.dp(this, 16)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Ui.BG)
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Ui.CARD)
+            setPadding(pad, Ui.dp(this@BrowserActivity, 10), pad, Ui.dp(this@BrowserActivity, 10))
+        }
+        top.addView(Ui.label(this, "Censor settings", 18f, Ui.TEXT, true).apply { layoutParams = Ui.weight() })
+        top.addView(Ui.button(this, "Done", true) { dlg.dismiss() })
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        SettingsUi.addSettings(this, body, p, false)
+        root.addView(top)
+        root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        dlg.setContentView(root)
+        dlg.window?.statusBarColor = Ui.CARD
+        dlg.window?.navigationBarColor = Ui.BG
+        dlg.setOnDismissListener { if (sig(p) != before) web.reload() }
+        dlg.show()
     }
 
     private fun load(input: String) {
@@ -221,7 +263,6 @@ class BrowserActivity : Activity() {
     }
 
     override fun onDestroy() {
-        bridge.restoreLevels()
         web.destroy()
         super.onDestroy()
     }

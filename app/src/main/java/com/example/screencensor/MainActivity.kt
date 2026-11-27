@@ -9,9 +9,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.text.Editable
-import android.text.TextWatcher
-import android.widget.*
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 
 class MainActivity : Activity() {
     private lateinit var p: SharedPreferences
@@ -20,56 +21,71 @@ class MainActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         p = getSharedPreferences("cfg", MODE_PRIVATE)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 64, 48, 48) }
+        window.statusBarColor = Ui.BG
+        window.navigationBarColor = Ui.BG
+        val pad = Ui.dp(this, 16)
 
-        fun label(t: String) = TextView(this).apply { text = t; textSize = 16f; setPadding(0, 32, 0, 8) }
-        fun check(t: String, key: String, def: Boolean) = CheckBox(this).apply {
-            text = t; isChecked = p.getBoolean(key, def)
-            setOnCheckedChangeListener { _, v -> p.edit().putBoolean(key, v).apply() }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, Ui.dp(this@MainActivity, 28), pad, Ui.dp(this@MainActivity, 32))
         }
 
-        root.addView(TextView(this).apply { text = "Screen Censor"; textSize = 26f })
-
-        root.addView(label("Safe browser (edits the images themselves: no flicker, nothing moves)"))
-        root.addView(Button(this).apply {
-            text = "Open safe browser"
-            setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java)) }
-        })
-        root.addView(Button(this).apply {
-            text = "Slideshow game (full screen)"
-            setOnClickListener { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra("play", true)) }
-        })
-        root.addView(check("Open in the feed view (only titles and pictures, made for phones)", "feedmode", true))
-        root.addView(EditText(this).apply {
-            hint = "Start page for the normal site view"
-            setText(p.getString("home", "https://old.reddit.com"))
-            addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) { p.edit().putString("home", s.toString()).apply() }
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            })
+        root.addView(Ui.label(this, "Screen Censor", 30f, Ui.TEXT, true))
+        root.addView(Ui.label(this, "Pictures are censored before you see them.", 14f, Ui.MUTED).apply {
+            setPadding(0, Ui.dp(this@MainActivity, 4), 0, Ui.dp(this@MainActivity, 18))
         })
 
-        SettingsUi.addSettings(this, root, p)
-
-        root.addView(label("Other apps (screen overlay)"))
-        root.addView(Button(this).apply { text = "Start overlay"; setOnClickListener { start() } })
-        root.addView(Button(this).apply {
-            text = "Stop overlay"
-            setOnClickListener {
-                stopService(Intent(this@MainActivity, CensorService::class.java))
-                status.text = "Stopped"
-            }
+        // ---- safe browser
+        val browser = Ui.card(this)
+        browser.addView(Ui.label(this, "Safe browser", 18f, Ui.TEXT, true))
+        browser.addView(Ui.label(this, "Edits the pictures themselves, so nothing flickers or moves.", 13f, Ui.MUTED).apply {
+            setPadding(0, Ui.dp(this@MainActivity, 3), 0, Ui.dp(this@MainActivity, 12))
         })
-        status = TextView(this).apply { text = "Overlay stopped"; setPadding(0, 24, 0, 0) }
-        root.addView(status)
-        setContentView(ScrollView(this).apply { addView(root) })
+        browser.addView(Ui.button(this, "Open safe browser", true) {
+            startActivity(Intent(this, BrowserActivity::class.java))
+        }, Ui.lp(this, 0, 8))
+        browser.addView(Ui.button(this, "Random pictures, full screen", false) {
+            startActivity(Intent(this, BrowserActivity::class.java).putExtra("shuffle", true))
+        }, Ui.lp(this))
+        root.addView(browser, Ui.lp(this, 0, 12))
+
+        // ---- overlay
+        val overlay = Ui.card(this)
+        overlay.addView(Ui.label(this, "Overlay for other apps", 18f, Ui.TEXT, true))
+        overlay.addView(Ui.label(this, "Covers things on screen over any app. It can lag behind scrolling.", 13f, Ui.MUTED).apply {
+            setPadding(0, Ui.dp(this@MainActivity, 3), 0, Ui.dp(this@MainActivity, 12))
+        })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val gap = Ui.dp(this, 4)
+        row.addView(Ui.button(this, "Start", true) { start() },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = gap })
+        row.addView(Ui.button(this, "Stop", false) {
+            stopService(Intent(this, CensorService::class.java))
+            status.text = "Overlay stopped"
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = gap })
+        overlay.addView(row, Ui.lp(this))
+        status = Ui.label(this, "Overlay stopped", 12f, Ui.MUTED).apply {
+            setPadding(0, Ui.dp(this@MainActivity, 8), 0, 0)
+        }
+        overlay.addView(status)
+        root.addView(overlay, Ui.lp(this, 0, 20))
+
+        // ---- settings
+        root.addView(Ui.label(this, "SETTINGS", 12f, Ui.MUTED, true).apply {
+            setPadding(Ui.dp(this@MainActivity, 4), 0, 0, Ui.dp(this@MainActivity, 8))
+        })
+        SettingsUi.addSettings(this, root, p, true)
+
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(Ui.BG)
+            addView(root)
+        })
     }
 
     private fun start() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-            status.text = "Allow \"Display over other apps\", come back and tap Start overlay again"
+            status.text = "Allow \"Display over other apps\", come back and tap Start again"
             return
         }
         if (Build.VERSION.SDK_INT >= 33 &&

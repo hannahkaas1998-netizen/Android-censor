@@ -2,115 +2,84 @@ package com.example.screencensor
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.View
-import android.widget.*
+import android.widget.LinearLayout
 
-/** The censoring settings, used both on the start screen and in the browser's menu. */
+/** The settings, as tidy collapsible cards. Used on the start screen and in the browser's menu. */
 object SettingsUi {
-    fun addSettings(ctx: Context, root: LinearLayout, p: SharedPreferences) {
-        fun label(t: String) = TextView(ctx).apply { text = t; textSize = 16f; setPadding(0, 32, 0, 8) }
-        fun check(t: String, key: String, def: Boolean) = CheckBox(ctx).apply {
-            text = t; isChecked = p.getBoolean(key, def)
-            setOnCheckedChangeListener { _, v -> p.edit().putBoolean(key, v).apply() }
-        }
-        fun radios(key: String, def: String, opts: List<Pair<String, String>>) = RadioGroup(ctx).apply {
-            val cur = p.getString(key, def)
-            opts.forEach { (v, t) ->
-                addView(RadioButton(context).apply { id = View.generateViewId(); text = t; tag = v; isChecked = v == cur })
-            }
-            setOnCheckedChangeListener { g, id -> p.edit().putString(key, g.findViewById<RadioButton>(id).tag as String).apply() }
-        }
-        fun strength(title: String, key: String, def: Int) {
-            val lab = label("")
-            fun set(v: Int) { lab.text = "$title: $v / 10" }
-            set(p.getInt(key, def))
-            root.addView(lab)
-            root.addView(SeekBar(ctx).apply {
-                max = 9
-                progress = p.getInt(key, def) - 1
-                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
-                        p.edit().putInt(key, v + 1).apply(); set(v + 1)
-                    }
-                    override fun onStartTrackingTouch(s: SeekBar?) {}
-                    override fun onStopTrackingTouch(s: SeekBar?) {}
-                })
-            })
-        }
+    fun addSettings(ctx: Context, root: LinearLayout, p: SharedPreferences, includeBrowser: Boolean) {
+        // ---- what to censor
+        val what = Ui.section(ctx, root, "What to censor", true)
+        Ui.toggle(ctx, what, "Nudity", "Breasts, genitals, anus", p, "nudity", true)
+        Ui.toggle(ctx, what, "Male genitals", "Untick to leave them uncovered", p, "male", true)
+        Ui.toggle(ctx, what, "Buttocks", "Also when clothed", p, "butt", true)
+        Ui.toggle(ctx, what, "Cleavage", "Covered chest", p, "cleavage", true)
+        Ui.toggle(ctx, what, "Faces", null, p, "face", false)
+        Ui.toggle(ctx, what, "Eyes only", null, p, "eyes", false)
+        Ui.toggle(ctx, what, "Feet", null, p, "feet", false)
 
-        root.addView(label("Videos"))
-        root.addView(check("Block videos (they can't be censored; untick to watch them uncensored)", "blockvideo", true))
-
-        root.addView(label("Censor"))
-        root.addView(check("Nudity (breasts, genitals, anus)", "nudity", true))
-        root.addView(check("Male genitals (untick to leave them uncovered)", "male", true))
-        root.addView(check("Buttocks (also when clothed)", "butt", true))
-        root.addView(check("Cleavage / covered chest", "cleavage", true))
-        root.addView(check("Faces", "face", false))
-        root.addView(check("Eyes only", "eyes", false))
-        root.addView(check("Feet", "feet", false))
-
-        root.addView(label("Cover"))
-        root.addView(radios("cover", "parts", listOf("parts" to "Detected areas only", "group" to "Whole body area", "screen" to "Entire picture")))
-        root.addView(label("Style"))
-        root.addView(radios("style", "mosaic", listOf(
-            "mosaic" to "Mosaic (pixels)",
+        // ---- how it looks
+        val look = Ui.section(ctx, root, "How it looks", true)
+        Ui.sub(ctx, look, "STYLE")
+        Ui.chips(ctx, look, p, "style", "mosaic", listOf(
+            "mosaic" to "Mosaic",
             "blur" to "Blur",
             "solid" to "Solid box",
-            "mannequin" to "Mannequin (white gloss skin, same shape)",
-            "smooth" to "Smooth (nipples and genitals disappear)"
-        )))
-        strength("Pixel size (higher = bigger blocks)", "pixel", 6)
-        strength("Blur strength (higher = blurrier)", "blurs", 5)
-        root.addView(check("Cover follows the body shape instead of a box (mosaic, blur, solid)", "shape", true))
-        root.addView(check("Mannequin: blank white face", "mface", true))
-        root.addView(TextView(ctx).apply {
-            text = "Mannequin looks best with Cover set to \u201cEntire picture\u201d."
-            textSize = 13f
-        })
+            "mannequin" to "Mannequin",
+            "smooth" to "Smooth"
+        ), 3)
+        look.addView(Ui.note(ctx, "Mannequin: white gloss skin, same shape. Smooth: nipples and genitals disappear."))
+        Ui.sub(ctx, look, "COVER")
+        Ui.chips(ctx, look, p, "cover", "parts", listOf(
+            "parts" to "Detected areas",
+            "group" to "Whole body area",
+            "screen" to "Entire picture"
+        ), 3)
+        Ui.slider(ctx, look, "Pixel size", 1, 10, p.getInt("pixel", 6), { "$it / 10" }) { p.edit().putInt("pixel", it).apply() }
+        Ui.slider(ctx, look, "Blur strength", 1, 10, p.getInt("blurs", 5), { "$it / 10" }) { p.edit().putInt("blurs", it).apply() }
+        Ui.toggle(ctx, look, "Follow the body shape", "Instead of a box (mosaic, blur, solid)", p, "shape", true)
+        Ui.toggle(ctx, look, "Mannequin: blank white face", null, p, "mface", true)
 
-        root.addView(label("Text on the cover"))
-        root.addView(check("Show text labels", "labels", true))
-        root.addView(EditText(ctx).apply {
-            hint = "Words, separated by commas"
-            setText(p.getString("words", "LOSER, PIG, GOONER"))
-            addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) { p.edit().putString("words", s.toString()).apply() }
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            })
-        })
+        // ---- text on the cover
+        val text = Ui.section(ctx, root, "Text on the cover", false)
+        Ui.toggle(ctx, text, "Show text labels", null, p, "labels", true)
+        Ui.field(ctx, text, "Words, separated by commas", p.getString("words", "LOSER, PIG, GOONER") ?: "") {
+            p.edit().putString("words", it).apply()
+        }
 
-        root.addView(label("Sensitivity (right = catches more)"))
-        root.addView(SeekBar(ctx).apply {
-            max = 70
-            progress = 80 - (p.getFloat("sens", 0.35f) * 100).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
-                    p.edit().putFloat("sens", (80 - v) / 100f).apply()
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        })
+        // ---- detection
+        val det = Ui.section(ctx, root, "Detection", false)
+        val level = Math.round((0.80f - p.getFloat("sens", 0.35f)) / (0.70f / 9f)) + 1
+        Ui.slider(ctx, det, "Sensitivity", 1, 10, level.coerceIn(1, 10), { "$it / 10" }) { lv ->
+            p.edit().putFloat("sens", 0.80f - (lv - 1) * 0.70f / 9f).apply()
+        }
+        det.addView(Ui.note(ctx, "Higher catches more, but also covers more things by mistake."))
 
-        root.addView(label("Focus mode (safe browser only)"))
-        root.addView(radios("heelmode", "off", listOf(
+        // ---- focus mode
+        val focus = Ui.section(ctx, root, "Focus mode (safe browser)", false)
+        Ui.sub(ctx, focus, "WHAT TO DO")
+        Ui.chips(ctx, focus, p, "heelmode", "off", listOf(
             "off" to "Off",
-            "zoom" to "Zoom in on the heels",
-            "isolate_blur" to "Blur everything except the heels",
-            "isolate_black" to "Black out everything except the heels"
-        )))
-        root.addView(label("Focus on"))
-        root.addView(radios("focustarget", "heels", listOf("heels" to "High heels", "male" to "Male genitals")))
-        strength("Heel detection sensitivity (higher = finds more)", "heelsens", 7)
-        root.addView(check("Heels: also count feet and other footwear", "heelmore", true))
-        root.addView(TextView(ctx).apply {
-            text = "Pictures with nothing to focus on are simply censored with your normal settings. " +
-                "If you focus on male genitals, untick \u201cMale genitals\u201d under Censor, or they will be covered."
-            textSize = 13f
-        })
+            "zoom" to "Zoom in",
+            "isolate_blur" to "Blur the rest",
+            "isolate_black" to "Black out the rest"
+        ), 2)
+        Ui.sub(ctx, focus, "FOCUS ON")
+        Ui.chips(ctx, focus, p, "focustarget", "heels", listOf("heels" to "High heels", "male" to "Male genitals"), 2)
+        Ui.slider(ctx, focus, "Heel detection", 1, 10, p.getInt("heelsens", 7), { "$it / 10" }) { p.edit().putInt("heelsens", it).apply() }
+        Ui.toggle(ctx, focus, "Heels: count feet and other footwear", null, p, "heelmore", true)
+        focus.addView(Ui.note(ctx, "Pictures with nothing to focus on are censored normally. For male genitals, untick \u201cMale genitals\u201d under What to censor, or they get covered."))
+
+        // ---- videos
+        val vid = Ui.section(ctx, root, "Videos", false)
+        Ui.toggle(ctx, vid, "Block videos", "They can't be censored. Untick to watch them uncensored.", p, "blockvideo", true)
+
+        // ---- browser (start screen only)
+        if (includeBrowser) {
+            val br = Ui.section(ctx, root, "Browser", false)
+            Ui.toggle(ctx, br, "Open in the feed view", "Only titles and pictures, made for phones", p, "feedmode", true)
+            Ui.field(ctx, br, "Start page for the normal site view", p.getString("home", "https://old.reddit.com") ?: "") {
+                p.edit().putString("home", it).apply()
+            }
+        }
     }
 }
