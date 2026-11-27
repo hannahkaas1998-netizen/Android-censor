@@ -55,6 +55,8 @@ select{flex:0 0 auto;max-width:42%}
 #pacedot{position:absolute;left:50%;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:#ff8fb1;box-shadow:0 0 12px rgba(255,143,177,.8)}
 #pacetxt{display:none;position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 18px);left:0;right:0;text-align:center;font-size:22px;font-weight:700;color:#fff;text-shadow:0 1px 6px #000;pointer-events:none}
 #pacetxt.now{color:#ff8fb1;font-size:34px;animation:pn .5s ease-in-out infinite alternate}
+#pacetxt.lbl{font-size:18px;opacity:.85}
+#pacetxt.cd{font-size:84px;line-height:1;color:#fff}
 @keyframes pn{to{opacity:.35}}
 #shcap{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:34px 16px calc(env(safe-area-inset-bottom) + 14px);color:#e8e8ee;font-size:14px;line-height:1.35;background:linear-gradient(transparent,rgba(0,0,0,.75));pointer-events:none}
 #shmsg{display:none;position:absolute;z-index:2;left:20px;right:20px;top:50%;transform:translateY(-50%);text-align:center;color:#c8c8d0;font-size:15px;line-height:1.45}
@@ -125,14 +127,14 @@ select{flex:0 0 auto;max-width:42%}
     <div id="pacemenu">
       <div class="lbl">Pace</div>
       <div class="grp" id="pacelv">
-        <button type="button" data-p="slow">Slow</button><button type="button" data-p="medium">Medium</button><button type="button" data-p="fast">Fast</button><button type="button" data-p="super">Super fast</button><button type="button" data-p="build">Build up</button>
+        <button type="button" data-p="random">Random</button><button type="button" data-p="slow">Slow</button><button type="button" data-p="medium">Medium</button><button type="button" data-p="fast">Fast</button><button type="button" data-p="super">Super fast</button><button type="button" data-p="build">Build up</button>
       </div>
-      <div class="lbl">Countdown</div>
+      <div class="lbl">Time (picked at random in the range, hidden)</div>
       <div class="grp" id="pacecd">
-        <button type="button" data-c="0">None</button><button type="button" data-c="3">3 min</button><button type="button" data-c="5">5 min</button><button type="button" data-c="10">10 min</button><button type="button" data-c="15">15 min</button><button type="button" data-c="20">20 min</button>
+        <button type="button" data-c="none">None</button><button type="button" data-c="0-5">0-5 min</button><button type="button" data-c="5-10">5-10 min</button><button type="button" data-c="10-15">10-15 min</button><button type="button" data-c="15-20">15-20 min</button><button type="button" data-c="20-30">20-30 min</button>
       </div>
       <div class="grp">
-        <button type="button" data-t="snd">Tick sound</button><button type="button" data-t="vib">Vibrate</button>
+        <button type="button" data-t="snd">Stroke tick</button><button type="button" data-t="vib">Vibrate</button><button type="button" data-t="csnd">Countdown beeps</button><button type="button" data-t="voice">Voice countdown</button>
       </div>
       <button type="button" id="pacego" class="go">Start</button>
       <div class="hint" id="pacehint"></div>
@@ -689,7 +691,7 @@ select{flex:0 0 auto;max-width:42%}
   function playNext() {
     if (vsi >= vsrcs.length) {
       if (!vsrcs.length) return;
-      vmsg.textContent = "Couldn't play this video. Videos can't be censored, so they are blocked by default. To watch them uncensored, untick \u201cBlock videos\u201d in the \u2699 menu at the top of the browser.";
+      vmsg.textContent = "Couldn't play this video. If \u201cBlock videos\u201d is ticked in the \u2699 menu, untick it. If it is already unticked, this video's format or connection isn't supported here.";
       vmsg.style.display = 'block';
       return;
     }
@@ -748,7 +750,7 @@ select{flex:0 0 auto;max-width:42%}
 
   // ---------- random pictures, full screen ----------
   var SORTS = ['hot', 'top:week', 'top:month', 'top:year', 'top:all', 'new'];
-  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false };
+  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false, shown: 0, dog: null };
   var shuf = $('shuf'), shimg = $('shimg'), shcap = $('shcap'), shmsg = $('shmsg'), shpanel = $('shpanel');
 
   function shLoad() {
@@ -865,8 +867,19 @@ select{flex:0 0 auto;max-width:42%}
     shMsg('');
     shimg.style.transition = spInterval() < 1200 && SP.mode !== 'off' ? 'none' : '';
     shimg.style.opacity = 0;
-    shimg.onload = function () { shimg.style.opacity = 1; spSchedule(); };
-    shimg.onerror = function () { if (SH.open) shNext(); };
+    clearTimeout(SH.dog);
+    var mine = ++SH.shown;
+    shimg.onload = function () {
+      if (mine !== SH.shown) return;
+      clearTimeout(SH.dog);
+      if (!shimg.naturalWidth) { if (SH.open) shNext(); return; }
+      shimg.style.opacity = 1;
+      spSchedule();
+    };
+    shimg.onerror = function () { if (SH.open && mine === SH.shown) { clearTimeout(SH.dog); shNext(); } };
+    // a picture that never arrives would leave the screen black: give up on it after a while
+    SH.dog = setTimeout(function () { if (SH.open && mine === SH.shown && shimg.style.opacity !== '1') shNext(); }, 12000);
+    shimg.removeAttribute('src');       // so the same address still counts as a new load
     shimg.src = it.u;
     shcap.textContent = 'r/' + it.sub + (it.title ? '  \u00B7  ' + it.title : '');
     for (var k = 0; k < 2; k++) { var nx = SH.pool[k]; if (nx) { var pre = new Image(); pre.src = nx.u; } }   // warm up the next ones
@@ -976,6 +989,7 @@ select{flex:0 0 auto;max-width:42%}
     document.body.style.overflow = '';
     shimg.removeAttribute('src');
     clearTimeout(SP.timer);
+    clearTimeout(SH.dog);
     $('spdmenu').style.display = 'none';
     $('pacemenu').style.display = 'none';
     pcStop();
@@ -1049,42 +1063,54 @@ select{flex:0 0 auto;max-width:42%}
   document.addEventListener('visibilitychange', spSchedule);
   spLabel();
 
-  // ----- pace indicator and countdown (does not change how fast the pictures change)
-  var BPM = { slow: 50, medium: 80, fast: 130, super: 190 };          // strokes per minute
-  var PNAMES = { slow: 'Slow', medium: 'Medium', fast: 'Fast', super: 'Super fast', build: 'Build up' };
-  var PB_FROM = 45, PB_TO = 200;                                       // build up: slow -> super fast over the countdown
-  var PC = { lv: 'medium', cd: 10, snd: false, vib: true, run: false, t0: 0, last: 0, phase: 0, raf: 0, ended: false, txtAt: 0, ac: null };
+  // ----- pace indicator and hidden countdown (does not change how fast the pictures change)
+  var PLV = { stop: 0, slow: 50, medium: 80, fast: 130, super: 190 };       // strokes per minute
+  var PNAMES = { random: 'Random', slow: 'Slow', medium: 'Medium', fast: 'Fast', super: 'Super fast', build: 'Build up' };
+  var SEGN = { stop: 'STOP', slow: 'Slow', medium: 'Medium', fast: 'Fast', super: 'Super fast' };
+  var PB_FROM = 45, PB_TO = 200;                                             // build up: slow -> super fast over the hidden time
+  // random mode: [pace, weight, shortest, longest] (seconds the pace lasts)
+  // random mode picks a pace by weight; early on the slow ones and stops are likely, near the end fast and super fast take over
+  var RW_EARLY = { stop: 15, slow: 35, medium: 30, fast: 15, super: 5 };
+  var RW_LATE = { stop: 2, slow: 5, medium: 16, fast: 35, super: 42 };
+  var RLEN = { stop: [3, 10], slow: [6, 25], medium: [6, 25], fast: [6, 22], super: [4, 12] };    // seconds a pace lasts
+  var PBUILD = 'pace build 5';
+  var PC = { lv: 'random', rng: '5-10', snd: false, vib: true, csnd: true, voice: false, run: false, t0: 0, dur: 0, last: 0, phase: 0, bpm: 0, target: 0,
+             seg: '', segEnd: 0, ended: false, raf: 0, txtAt: 0, ac: null, lastSec: -1 };
   try {
-    var pv = JSON.parse(localStorage.getItem('shuf_pace') || 'null');
+    var pv = JSON.parse(localStorage.getItem('shuf_pace2') || 'null');
     if (pv) {
       if (PNAMES[pv.lv]) PC.lv = pv.lv;
-      if (pv.cd !== undefined) PC.cd = +pv.cd || 0;
-      PC.snd = !!pv.snd; PC.vib = pv.vib !== false;
+      if (typeof pv.rng === 'string' && (pv.rng === 'none' || /^\d+-\d+$/.test(pv.rng))) PC.rng = pv.rng;
+      PC.snd = !!pv.snd; PC.vib = pv.vib !== false; PC.csnd = pv.csnd !== false; PC.voice = !!pv.voice;
     }
   } catch (e) {}
-  function pcStore() { try { localStorage.setItem('shuf_pace', JSON.stringify({ lv: PC.lv, cd: PC.cd, snd: PC.snd, vib: PC.vib })); } catch (e) {} }
-  function pcProgress() { return PC.cd ? Math.min(1, (Date.now() - PC.t0) / (PC.cd * 60000)) : 0; }
-  function pcBpm() {
-    if (PC.lv === 'build') return PB_FROM * Math.pow(PB_TO / PB_FROM, pcProgress());
-    return BPM[PC.lv] || 80;
+  function pcStore() { try { localStorage.setItem('shuf_pace2', JSON.stringify({ lv: PC.lv, rng: PC.rng, snd: PC.snd, vib: PC.vib, csnd: PC.csnd, voice: PC.voice })); } catch (e) {} }
+  function pcBuzz(p) { if (PC.vib && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} } }
+  // the real length: random inside the chosen range, never shown to the user
+  function pcPickDur() {
+    var r = PC.rng;
+    if (r === 'none') return PC.lv === 'build' ? 10 * 60000 : 0;
+    var p = r.split('-'), lo = Math.max(0.5, +p[0]), hi = Math.max(lo, +p[1]);
+    return (lo + Math.random() * (hi - lo)) * 60000;
   }
   function pcMenuLabels() {
     var i, b;
     b = $('pacelv').querySelectorAll('button');
     for (i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-p') === PC.lv ? 'on' : '';
     b = $('pacecd').querySelectorAll('button');
-    for (i = 0; i < b.length; i++) b[i].className = +b[i].getAttribute('data-c') === PC.cd ? 'on' : '';
+    for (i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-c') === PC.rng ? 'on' : '';
     b = $('pacemenu').querySelectorAll('button[data-t]');
     for (i = 0; i < b.length; i++) b[i].className = PC[b[i].getAttribute('data-t')] ? 'on' : '';
     $('pacego').textContent = PC.run ? 'Stop' : 'Start';
     $('pacebtn').className = PC.run ? 'live' : '';
     $('pacebtn').textContent = PC.run ? 'Pace \u25CF' : 'Pace';
-    $('pacehint').textContent = PC.lv === 'build'
-      ? 'Build up: the pace rises steadily from slow to super fast over the countdown' + (PC.cd ? '.' : ' (10 min if no countdown is set).')
-      : 'A dot moves up and down at the chosen pace. Each stroke can tick and vibrate.';
+    $('pacehint').textContent =
+      (PC.lv === 'random' ? 'Random: the pace jumps between stop, slow, medium, fast and super fast, and gets more intense towards the end. ' : '') +
+      (PC.lv === 'build' ? 'Build up: the pace rises steadily from slow to super fast. ' : '') +
+      (PC.rng === 'none' ? 'No time limit.' : 'The time is chosen at random in the range and is not shown. The last 10 seconds are counted down, then it says CUM NOW.') + ' [' + PBUILD + ']';
   }
   function pcBeat() {
-    if (PC.vib && navigator.vibrate) { try { navigator.vibrate(18); } catch (e) {} }
+    pcBuzz(18);
     if (PC.snd && PC.ac) {
       try {
         var o = PC.ac.createOscillator(), g = PC.ac.createGain();
@@ -1094,41 +1120,107 @@ select{flex:0 0 auto;max-width:42%}
       } catch (e) {}
     }
   }
-  function pcText() {
+  function pcAudio() {
+    if (!PC.ac) { try { PC.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (PC.ac && PC.ac.resume) { try { PC.ac.resume(); } catch (e) {} }
+    return PC.ac;
+  }
+  function pcTone(f0, f1, secs, gain) {
+    if (!PC.ac) return;
+    try {
+      var t = PC.ac.currentTime, o = PC.ac.createOscillator(), g = PC.ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.linearRampToValueAtTime(f1, t + secs);
+      g.gain.setValueAtTime(gain, t);
+      g.gain.linearRampToValueAtTime(0.0001, t + secs);
+      o.connect(g); g.connect(PC.ac.destination);
+      o.start(t); o.stop(t + secs + 0.02);
+    } catch (e) {}
+  }
+  function pcSpeak(txt) {
+    if (!PC.voice || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(txt);
+      u.rate = 1.1; u.volume = 1;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function pcCountSound(sec) {                         // one beep per second, rising in pitch, plus the spoken number
+    if (PC.csnd) pcTone(480 + (10 - sec) * 80, 480 + (10 - sec) * 80, 0.14, 0.35);
+    pcSpeak(String(sec));
+  }
+  function pcFinalSound() {
+    if (PC.csnd) { pcTone(900, 1500, 0.9, 0.4); setTimeout(function () { pcTone(1500, 1500, 0.6, 0.4); }, 950); }
+    pcSpeak('Cum now');
+  }
+  // random mode: pick the next pace and how long it lasts (never the same pace twice in a row)
+  function pcProg() {                                   // 0 at the start, 1 at the end (10 minutes count as "the end" when there is no time limit)
+    var el = Date.now() - PC.t0;
+    return Math.max(0, Math.min(1, el / (PC.dur || 600000)));
+  }
+  function pcNextSeg(nowMs) {
+    var prog = pcProg(), names = ['stop', 'slow', 'medium', 'fast', 'super'], w = [], tot = 0, i;
+    for (i = 0; i < names.length; i++) {
+      w[i] = names[i] === PC.seg ? 0 : RW_EARLY[names[i]] * (1 - prog) + RW_LATE[names[i]] * prog;
+      tot += w[i];
+    }
+    var r = Math.random() * tot, pick = names[names.length - 1];
+    for (i = 0; i < names.length; i++) { r -= w[i]; if (w[i] > 0 && r <= 0) { pick = names[i]; break; } }
+    var len = RLEN[pick];
+    PC.seg = pick;
+    PC.segEnd = nowMs + (len[0] + Math.random() * (len[1] - len[0])) * (1 - 0.45 * prog) * 1000;     // changes come quicker near the end
+    PC.target = PLV[pick] ? PLV[pick] * (0.92 + Math.random() * 0.16) * (1 + 0.12 * prog) : 0;
+    pcBuzz(pick === 'stop' ? [60, 80, 60] : 30);          // a buzz tells you the pace changed
+  }
+  function pcSetText(txt, cls) {
     var t = $('pacetxt');
-    if (PC.ended) { t.textContent = 'NOW'; t.className = 'now'; return; }
-    t.className = '';
-    var bpm = Math.round(pcBpm()), label = PC.lv === 'build' ? 'Build up' : PNAMES[PC.lv];
-    if (PC.cd) {
-      var left = Math.max(0, Math.ceil(PC.cd * 60 - (Date.now() - PC.t0) / 1000));
-      t.textContent = Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2) + '  \u00B7  ' + label + ' ' + bpm + '/min';
-    } else t.textContent = label + ' ' + bpm + '/min';
+    if (t.textContent !== txt) t.textContent = txt;
+    if (t.className !== cls) t.className = cls;
   }
   function pcFrame(ts) {
     if (!PC.run) return;
     var now = ts || performance.now();
     var dt = Math.min(0.1, Math.max(0, (now - PC.last) / 1000));
     PC.last = now;
+    var elapsed = Date.now() - PC.t0;
+    var left = PC.dur ? PC.dur - elapsed : Infinity;
+    var finale = PC.dur && left <= 10000;
+
+    // what pace should it be right now?
+    if (finale) PC.target = PLV.super;
+    else if (PC.lv === 'random') { if (!PC.seg || now >= PC.segEnd) pcNextSeg(now); }
+    else if (PC.lv === 'build') PC.target = PB_FROM * Math.pow(PB_TO / PB_FROM, Math.min(1, elapsed / (PC.dur || 600000)));
+    else PC.target = PLV[PC.lv] || 80;
+    PC.bpm += (PC.target - PC.bpm) * Math.min(1, dt * 3);          // change speed smoothly, not in jumps
+    if (PC.target === 0 && PC.bpm < 3) PC.bpm = 0;
+
     var before = Math.floor(PC.phase + 0.5);
-    PC.phase += dt * pcBpm() / 60;
-    if (Math.floor(PC.phase + 0.5) !== before) pcBeat();           // beat at the bottom of each stroke
+    PC.phase += dt * PC.bpm / 60;
+    if (PC.bpm > 0 && Math.floor(PC.phase + 0.5) !== before) pcBeat();     // beat at the bottom of each stroke
     $('pacedot').style.top = ((0.5 - 0.5 * Math.cos(PC.phase * 2 * Math.PI)) * 100) + '%';
-    if (PC.cd && !PC.ended && Date.now() - PC.t0 >= PC.cd * 60000) {
-      PC.ended = true;
-      if (PC.vib && navigator.vibrate) { try { navigator.vibrate([300, 100, 300, 100, 600]); } catch (e) {} }
-      pcText();
+
+    if (PC.dur && left <= 0) {
+      if (!PC.ended) { PC.ended = true; pcBuzz([300, 100, 300, 100, 700]); pcFinalSound(); }
+      pcSetText('CUM NOW', 'now');
+    } else if (finale) {
+      var sec = Math.ceil(left / 1000);
+      if (sec !== PC.lastSec) { PC.lastSec = sec; pcBuzz(50); pcCountSound(sec); }
+      pcSetText(String(sec), 'cd');
+    } else {
+      pcSetText(PC.lv === 'random' ? SEGN[PC.seg] || '' : PNAMES[PC.lv], 'lbl');
     }
-    if (now - PC.txtAt > 250) { PC.txtAt = now; if (!PC.ended) pcText(); }
     PC.raf = requestAnimationFrame(pcFrame);
   }
   function pcStart() {
-    if (PC.lv === 'build' && !PC.cd) PC.cd = 10;
-    if (PC.snd && !PC.ac) { try { PC.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-    if (PC.ac && PC.ac.resume) { try { PC.ac.resume(); } catch (e) {} }
-    PC.run = true; PC.ended = false; PC.t0 = Date.now(); PC.last = performance.now(); PC.phase = 0; PC.txtAt = 0;
+    if (PC.snd || PC.csnd || PC.voice) pcAudio();            // must happen inside the tap, or the browser keeps sound off
+    if (PC.voice && window.speechSynthesis) { try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} }
+    PC.run = true; PC.ended = false; PC.t0 = Date.now(); PC.dur = pcPickDur();
+    PC.last = performance.now(); PC.phase = 0; PC.bpm = 0; PC.target = 0; PC.seg = ''; PC.segEnd = 0; PC.lastSec = -1;
     $('pacehud').style.display = 'block'; $('pacetxt').style.display = 'block';
     $('pacemenu').style.display = 'none';
-    pcMenuLabels(); pcText();
+    pcMenuLabels();
     cancelAnimationFrame(PC.raf);
     PC.raf = requestAnimationFrame(pcFrame);
   }
@@ -1146,14 +1238,14 @@ select{flex:0 0 auto;max-width:42%}
     pcMenuLabels();
   });
   $('pacemenu').addEventListener('click', function (e) {
-    var p = e.target.getAttribute && e.target.getAttribute('data-p');
-    var c = e.target.getAttribute && e.target.getAttribute('data-c');
-    var t = e.target.getAttribute && e.target.getAttribute('data-t');
-    if (p) { PC.lv = p; if (p === 'build' && !PC.cd) PC.cd = 10; pcStore(); if (PC.run) PC.t0 = Date.now(); }
-    if (c !== null && c !== undefined && e.target.hasAttribute && e.target.hasAttribute('data-c')) { PC.cd = +c; pcStore(); if (PC.run) { PC.t0 = Date.now(); PC.ended = false; } }
+    var g = function (n) { return e.target.getAttribute ? e.target.getAttribute(n) : null; };
+    var p = g('data-p'), c = g('data-c'), t = g('data-t');
+    if (p) { PC.lv = p; pcStore(); if (PC.run) pcStop(); }          // changing the pace starts a fresh game
+    if (c) { PC.rng = c; pcStore(); if (PC.run) pcStop(); }
     if (t) {
       PC[t] = !PC[t]; pcStore();
-      if (t === 'snd' && PC.snd && !PC.ac) { try { PC.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (x) {} }
+      if ((t === 'snd' || t === 'csnd') && PC[t]) { pcAudio(); if (t === 'csnd') pcTone(700, 700, 0.12, 0.3); }   // short beep so you can check the volume
+      if (t === 'voice' && PC.voice) pcSpeak('Ten');
     }
     if (e.target.id === 'pacego') { if (PC.run) pcStop(); else pcStart(); }
     pcMenuLabels();
