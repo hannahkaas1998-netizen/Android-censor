@@ -31,6 +31,31 @@ select{flex:0 0 auto;max-width:42%}
 #shtop{position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;gap:8px}
 #shtop button,#shpanel button.b{font:inherit;color:#fff;background:rgba(30,30,34,.85);border:0;border-radius:22px;padding:10px 16px}
 #shtop .sp{flex:1}
+#spd{position:absolute;z-index:4;right:12px;bottom:calc(env(safe-area-inset-bottom) + 64px);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+#spdbtn{font:inherit;font-size:14px;color:#fff;background:rgba(30,30,34,.85);border:0;border-radius:22px;padding:10px 16px}
+#spdbtn.live{background:#7cb4ff;color:#06121f;font-weight:600}
+#spdmenu{display:none;flex-direction:column;align-items:stretch;gap:6px;padding:10px;border-radius:16px;background:rgba(20,20,24,.95)}
+#spdmenu button{font:inherit;font-size:14px;color:#f2f2f4;background:#232329;border:1px solid #33333b;border-radius:14px;padding:8px 14px;text-align:left}
+#spdmenu button.on{background:#7cb4ff;color:#06121f;border-color:#7cb4ff;font-weight:600}
+#spdmenu .dur{display:none;flex-wrap:wrap;gap:6px;padding:2px 0}
+#spdmenu .dur button{padding:6px 10px;text-align:center}
+#spdmenu .hint{font-size:12px;color:#a5a5b0;max-width:210px;line-height:1.35}
+#pace{position:absolute;z-index:4;left:12px;bottom:calc(env(safe-area-inset-bottom) + 64px);display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+#pacebtn{font:inherit;font-size:14px;color:#fff;background:rgba(30,30,34,.85);border:0;border-radius:22px;padding:10px 16px}
+#pacebtn.live{background:#ff8fb1;color:#2a0614;font-weight:600}
+#pacemenu{display:none;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:rgba(20,20,24,.95);max-width:260px}
+#pacemenu .lbl{font-size:12px;color:#a5a5b0;margin-bottom:-4px}
+#pacemenu .grp{display:flex;flex-wrap:wrap;gap:6px}
+#pacemenu button{font:inherit;font-size:14px;color:#f2f2f4;background:#232329;border:1px solid #33333b;border-radius:14px;padding:7px 12px}
+#pacemenu button.on{background:#ff8fb1;color:#2a0614;border-color:#ff8fb1;font-weight:600}
+#pacemenu button.go{background:#7cb4ff;color:#06121f;border-color:#7cb4ff;font-weight:700;padding:10px}
+#pacemenu .hint{font-size:12px;color:#a5a5b0;line-height:1.35}
+#pacehud{display:none;position:absolute;z-index:3;left:16px;top:22%;height:46%;width:10px;pointer-events:none}
+#pacetrack{position:relative;height:100%;width:100%;border-radius:6px;background:rgba(255,255,255,.18)}
+#pacedot{position:absolute;left:50%;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:#ff8fb1;box-shadow:0 0 12px rgba(255,143,177,.8)}
+#pacetxt{display:none;position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 18px);left:0;right:0;text-align:center;font-size:22px;font-weight:700;color:#fff;text-shadow:0 1px 6px #000;pointer-events:none}
+#pacetxt.now{color:#ff8fb1;font-size:34px;animation:pn .5s ease-in-out infinite alternate}
+@keyframes pn{to{opacity:.35}}
 #shcap{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:34px 16px calc(env(safe-area-inset-bottom) + 14px);color:#e8e8ee;font-size:14px;line-height:1.35;background:linear-gradient(transparent,rgba(0,0,0,.75));pointer-events:none}
 #shmsg{display:none;position:absolute;z-index:2;left:20px;right:20px;top:50%;transform:translateY(-50%);text-align:center;color:#c8c8d0;font-size:15px;line-height:1.45}
 #shpanel{display:none;position:absolute;z-index:5;top:0;right:0;bottom:0;left:0;overflow:auto;background:rgba(10,10,12,.98);padding:calc(env(safe-area-inset-top) + 16px) 16px 24px}
@@ -86,6 +111,36 @@ select{flex:0 0 auto;max-width:42%}
 <div id="shuf">
   <div id="shstage"><img id="shimg" alt=""></div>
   <div id="shtop"><button id="shclose" type="button">&#10005;</button><span class="sp"></span><button id="shsubs" type="button">Subreddits</button><button id="shsave" type="button">Save</button></div>
+  <div id="spd">
+    <div id="spdmenu">
+      <button type="button" data-m="off">Off (tap to advance)</button>
+      <button type="button" data-m="slow">Slow</button>
+      <button type="button" data-m="medium">Medium</button>
+      <button type="button" data-m="fast">Fast</button>
+      <button type="button" data-m="super">Super fast</button>
+    </div>
+    <button id="spdbtn" type="button">Speed</button>
+  </div>
+  <div id="pace">
+    <div id="pacemenu">
+      <div class="lbl">Pace</div>
+      <div class="grp" id="pacelv">
+        <button type="button" data-p="slow">Slow</button><button type="button" data-p="medium">Medium</button><button type="button" data-p="fast">Fast</button><button type="button" data-p="super">Super fast</button><button type="button" data-p="build">Build up</button>
+      </div>
+      <div class="lbl">Countdown</div>
+      <div class="grp" id="pacecd">
+        <button type="button" data-c="0">None</button><button type="button" data-c="3">3 min</button><button type="button" data-c="5">5 min</button><button type="button" data-c="10">10 min</button><button type="button" data-c="15">15 min</button><button type="button" data-c="20">20 min</button>
+      </div>
+      <div class="grp">
+        <button type="button" data-t="snd">Tick sound</button><button type="button" data-t="vib">Vibrate</button>
+      </div>
+      <button type="button" id="pacego" class="go">Start</button>
+      <div class="hint" id="pacehint"></div>
+    </div>
+    <button id="pacebtn" type="button">Pace</button>
+  </div>
+  <div id="pacehud"><div id="pacetrack"><div id="pacedot"></div></div></div>
+  <div id="pacetxt"></div>
   <div id="shcap"></div>
   <div id="shmsg"></div>
   <div id="shpanel">
@@ -693,7 +748,7 @@ select{flex:0 0 auto;max-width:42%}
 
   // ---------- random pictures, full screen ----------
   var SORTS = ['hot', 'top:week', 'top:month', 'top:year', 'top:all', 'new'];
-  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, busy: false, open: false };
+  var SH = { subs: [], followed: [], pool: [], hist: [], idx: -1, seen: {}, cursors: {}, q: {}, recent: [], fails: {}, busy: null, open: false };
   var shuf = $('shuf'), shimg = $('shimg'), shcap = $('shcap'), shmsg = $('shmsg'), shpanel = $('shpanel');
 
   function shLoad() {
@@ -751,51 +806,76 @@ select{flex:0 0 auto;max-width:42%}
     return viaJson().then(function (r) { jsonOK = true; return r; }, function () { jsonOK = false; return viaHtml(); });
   }
 
-  // keeps a pile of upcoming pictures: random subreddit, random sort, sometimes deeper pages
-  function shRefill() {
-    if (SH.busy || !SH.subs.length) return Promise.resolve();
-    SH.busy = true;
+  // Pictures are kept in one queue per subreddit, and the next picture always comes from a subreddit
+  // that wasn't used in the last few, so the mix stays varied however big the subreddits are.
+  function pickSub() {
+    var live = SH.subs.filter(function (x) { return (SH.fails[x] || 0) < 3; });
+    if (!live.length) return null;
+    var win = Math.min(3, live.length - 1);
+    var avoid = win > 0 ? SH.recent.slice(-win) : [];
+    var c = live.filter(function (x) { return avoid.indexOf(x) < 0; });
+    if (!c.length) c = live;
+    return c[Math.floor(Math.random() * c.length)];
+  }
+  function shFetchSub(sub) {
+    var open = SORTS.filter(function (x) { return SH.cursors[sub + '|' + x] !== false; });
+    if (!open.length) { SH.fails[sub] = 3; return Promise.resolve(); }      // everything in it has been shown
+    var sort = open[Math.floor(Math.random() * open.length)];
+    var key = sub + '|' + sort;
+    return shFetch(sub, sort, SH.cursors[key] || null).then(function (res) {
+      SH.cursors[key] = res.after || false;
+      var q = SH.q[sub] || (SH.q[sub] = []), added = 0;
+      res.items.forEach(function (d) {
+        var info = pics(d);
+        if (info.video || info.total > 0 || info.album || !info.list.length) return;   // single pictures only
+        var u = info.list[0], full = u.full || u.u;
+        if (SH.seen[full]) return;
+        SH.seen[full] = 1;
+        q.push({ u: u.u, full: full, title: d.title || '', sub: sub });
+        added++;
+      });
+      shuffleArr(q);
+      SH.fails[sub] = added ? 0 : (SH.fails[sub] || 0) + 0.5;
+    }, function () { SH.fails[sub] = (SH.fails[sub] || 0) + 1; });
+  }
+  // keeps a pile of upcoming pictures (at least [target]) taken from the subreddits in turn
+  function shRefill(target) {
+    if (SH.busy) return SH.busy;
+    if (!SH.subs.length) return Promise.resolve();
     var tries = 0;
     function one() {
-      if (SH.pool.length >= 10 || tries >= 6) return Promise.resolve();
+      if (SH.pool.length >= target || tries >= 40) return Promise.resolve();
       tries++;
-      var sub = SH.subs[Math.floor(Math.random() * SH.subs.length)];
-      var sort = SORTS[Math.floor(Math.random() * SORTS.length)];
-      var key = sub + '|' + sort;
-      var cur = SH.cursors[key];
-      if (cur === false) return one();                       // that listing has run out
-      return shFetch(sub, sort, cur || null).then(function (res) {
-        SH.cursors[key] = res.after || false;
-        res.items.forEach(function (d) {
-          var info = pics(d);
-          if (info.video || info.total > 0 || info.album || !info.list.length) return;   // single pictures only
-          var u = info.list[0], full = u.full || u.u;
-          if (SH.seen[full]) return;
-          SH.seen[full] = 1;
-          SH.pool.push({ u: u.u, full: full, title: d.title || '', sub: sub });
-        });
-        shuffleArr(SH.pool);
+      var sub = pickSub();
+      if (!sub) return Promise.resolve();
+      var q = SH.q[sub] || (SH.q[sub] = []);
+      if (q.length) {
+        SH.pool.push(q.shift());
+        SH.recent.push(sub);
+        if (SH.recent.length > 30) SH.recent.shift();
         return one();
-      }, function () { return one(); });
+      }
+      return shFetchSub(sub).then(one, one);
     }
-    return one().then(function () { SH.busy = false; }, function () { SH.busy = false; });
+    SH.busy = one().then(function () { SH.busy = null; }, function () { SH.busy = null; });
+    return SH.busy;
   }
 
   function shShow(it) {
     shMsg('');
+    shimg.style.transition = spInterval() < 1200 && SP.mode !== 'off' ? 'none' : '';
     shimg.style.opacity = 0;
-    shimg.onload = function () { shimg.style.opacity = 1; };
+    shimg.onload = function () { shimg.style.opacity = 1; spSchedule(); };
     shimg.onerror = function () { if (SH.open) shNext(); };
     shimg.src = it.u;
     shcap.textContent = 'r/' + it.sub + (it.title ? '  \u00B7  ' + it.title : '');
-    var nx = SH.pool[0];
-    if (nx) { var pre = new Image(); pre.src = nx.u; }       // warm up the next one
+    for (var k = 0; k < 2; k++) { var nx = SH.pool[k]; if (nx) { var pre = new Image(); pre.src = nx.u; } }   // warm up the next ones
   }
   function shNext() {
     if (SH.idx < SH.hist.length - 1) { SH.idx++; shShow(SH.hist[SH.idx]); return; }
     if (!SH.pool.length) {
       shMsg('Finding pictures...');
-      shRefill().then(function () {
+      shRefill(1).then(function () {
         if (!SH.open) return;
         if (SH.pool.length) shNext();
         else shMsg("Couldn't find any pictures. Check the subreddits, or log in on the normal site first.");
@@ -807,7 +887,7 @@ select{flex:0 0 auto;max-width:42%}
     if (SH.hist.length > 200) { SH.hist.shift(); }
     SH.idx = SH.hist.length - 1;
     shShow(it);
-    if (SH.pool.length < 5) shRefill();
+    if (SH.pool.length < 6) shRefill(10);
   }
   function shPrev() { if (SH.idx > 0) { SH.idx--; shShow(SH.hist[SH.idx]); } }
 
@@ -833,7 +913,7 @@ select{flex:0 0 auto;max-width:42%}
     });
     $('shcount').textContent = SH.subs.length + ' selected';
   }
-  function showPicker() { shpanel.style.display = 'block'; renderPicker(); }
+  function showPicker() { shpanel.style.display = 'block'; clearTimeout(SP.timer); renderPicker(); }
 
   function shLoadFollowed() {
     var names = {}, pages = 0;
@@ -875,7 +955,7 @@ select{flex:0 0 auto;max-width:42%}
   function shStart() {
     shpanel.style.display = 'none';
     if (!SH.subs.length) { showPicker(); shNote('Pick at least one subreddit.'); return; }
-    SH.pool = []; SH.hist = []; SH.idx = -1; SH.cursors = {}; SH.seen = {};
+    SH.pool = []; SH.hist = []; SH.idx = -1; SH.cursors = {}; SH.seen = {}; SH.q = {}; SH.recent = []; SH.fails = {};
     shMsg('Finding pictures...');
     shNext();
   }
@@ -895,6 +975,10 @@ select{flex:0 0 auto;max-width:42%}
     shpanel.style.display = 'none';
     document.body.style.overflow = '';
     shimg.removeAttribute('src');
+    clearTimeout(SP.timer);
+    $('spdmenu').style.display = 'none';
+    $('pacemenu').style.display = 'none';
+    pcStop();
     immersive(false);
     if (!fromPop) history.back();
   }
@@ -925,6 +1009,158 @@ select{flex:0 0 auto;max-width:42%}
   });
   $('shnone').addEventListener('click', function () { SH.subs = []; shStore(); renderPicker(); });
   $('shgo').addEventListener('click', shStart);
+
+  // ----- picture speed: automatic advance
+  var SPEEDS = { slow: 6000, medium: 3000, fast: 1400, super: 550 };
+  var NAMES = { off: 'Speed', slow: 'Slow', medium: 'Medium', fast: 'Fast', super: 'Super fast' };
+  var SP = { mode: 'off', timer: null };
+  try {
+    var sv = JSON.parse(localStorage.getItem('shuf_speed') || 'null');
+    if (sv && NAMES[sv.mode]) SP.mode = sv.mode;
+  } catch (e) {}
+  function spStore() { try { localStorage.setItem('shuf_speed', JSON.stringify({ mode: SP.mode })); } catch (e) {} }
+  function spInterval() { return SPEEDS[SP.mode] || 0; }
+  function spSchedule() {
+    clearTimeout(SP.timer);
+    if (SP.mode === 'off' || !SH.open || shpanel.style.display === 'block' || document.hidden) return;
+    SP.timer = setTimeout(function () { if (SH.open) shNext(); }, spInterval());
+  }
+  function spLabel() {
+    var b = $('spdbtn');
+    b.className = SP.mode === 'off' ? '' : 'live';
+    b.textContent = SP.mode === 'off' ? 'Pictures: tap' : 'Pictures: ' + NAMES[SP.mode];
+    var ms = $('spdmenu').querySelectorAll('button[data-m]');
+    for (var i = 0; i < ms.length; i++) ms[i].className = ms[i].getAttribute('data-m') === SP.mode ? 'on' : '';
+  }
+  $('spdbtn').addEventListener('click', function () {
+    var m = $('spdmenu');
+    m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+    $('pacemenu').style.display = 'none';
+    spLabel();
+  });
+  $('spdmenu').addEventListener('click', function (e) {
+    var m = e.target.getAttribute && e.target.getAttribute('data-m');
+    if (m) { SP.mode = m; spStore(); $('spdmenu').style.display = 'none'; }
+    spLabel();
+    spSchedule();
+  });
+  $('spd').addEventListener('click', function (e) { e.stopPropagation(); });
+  $('spd').addEventListener('touchend', function (e) { e.stopPropagation(); });
+  document.addEventListener('visibilitychange', spSchedule);
+  spLabel();
+
+  // ----- pace indicator and countdown (does not change how fast the pictures change)
+  var BPM = { slow: 50, medium: 80, fast: 130, super: 190 };          // strokes per minute
+  var PNAMES = { slow: 'Slow', medium: 'Medium', fast: 'Fast', super: 'Super fast', build: 'Build up' };
+  var PB_FROM = 45, PB_TO = 200;                                       // build up: slow -> super fast over the countdown
+  var PC = { lv: 'medium', cd: 10, snd: false, vib: true, run: false, t0: 0, last: 0, phase: 0, raf: 0, ended: false, txtAt: 0, ac: null };
+  try {
+    var pv = JSON.parse(localStorage.getItem('shuf_pace') || 'null');
+    if (pv) {
+      if (PNAMES[pv.lv]) PC.lv = pv.lv;
+      if (pv.cd !== undefined) PC.cd = +pv.cd || 0;
+      PC.snd = !!pv.snd; PC.vib = pv.vib !== false;
+    }
+  } catch (e) {}
+  function pcStore() { try { localStorage.setItem('shuf_pace', JSON.stringify({ lv: PC.lv, cd: PC.cd, snd: PC.snd, vib: PC.vib })); } catch (e) {} }
+  function pcProgress() { return PC.cd ? Math.min(1, (Date.now() - PC.t0) / (PC.cd * 60000)) : 0; }
+  function pcBpm() {
+    if (PC.lv === 'build') return PB_FROM * Math.pow(PB_TO / PB_FROM, pcProgress());
+    return BPM[PC.lv] || 80;
+  }
+  function pcMenuLabels() {
+    var i, b;
+    b = $('pacelv').querySelectorAll('button');
+    for (i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-p') === PC.lv ? 'on' : '';
+    b = $('pacecd').querySelectorAll('button');
+    for (i = 0; i < b.length; i++) b[i].className = +b[i].getAttribute('data-c') === PC.cd ? 'on' : '';
+    b = $('pacemenu').querySelectorAll('button[data-t]');
+    for (i = 0; i < b.length; i++) b[i].className = PC[b[i].getAttribute('data-t')] ? 'on' : '';
+    $('pacego').textContent = PC.run ? 'Stop' : 'Start';
+    $('pacebtn').className = PC.run ? 'live' : '';
+    $('pacebtn').textContent = PC.run ? 'Pace \u25CF' : 'Pace';
+    $('pacehint').textContent = PC.lv === 'build'
+      ? 'Build up: the pace rises steadily from slow to super fast over the countdown' + (PC.cd ? '.' : ' (10 min if no countdown is set).')
+      : 'A dot moves up and down at the chosen pace. Each stroke can tick and vibrate.';
+  }
+  function pcBeat() {
+    if (PC.vib && navigator.vibrate) { try { navigator.vibrate(18); } catch (e) {} }
+    if (PC.snd && PC.ac) {
+      try {
+        var o = PC.ac.createOscillator(), g = PC.ac.createGain();
+        o.frequency.value = 900; g.gain.value = 0.15;
+        o.connect(g); g.connect(PC.ac.destination);
+        o.start(); o.stop(PC.ac.currentTime + 0.035);
+      } catch (e) {}
+    }
+  }
+  function pcText() {
+    var t = $('pacetxt');
+    if (PC.ended) { t.textContent = 'NOW'; t.className = 'now'; return; }
+    t.className = '';
+    var bpm = Math.round(pcBpm()), label = PC.lv === 'build' ? 'Build up' : PNAMES[PC.lv];
+    if (PC.cd) {
+      var left = Math.max(0, Math.ceil(PC.cd * 60 - (Date.now() - PC.t0) / 1000));
+      t.textContent = Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2) + '  \u00B7  ' + label + ' ' + bpm + '/min';
+    } else t.textContent = label + ' ' + bpm + '/min';
+  }
+  function pcFrame(ts) {
+    if (!PC.run) return;
+    var now = ts || performance.now();
+    var dt = Math.min(0.1, Math.max(0, (now - PC.last) / 1000));
+    PC.last = now;
+    var before = Math.floor(PC.phase + 0.5);
+    PC.phase += dt * pcBpm() / 60;
+    if (Math.floor(PC.phase + 0.5) !== before) pcBeat();           // beat at the bottom of each stroke
+    $('pacedot').style.top = ((0.5 - 0.5 * Math.cos(PC.phase * 2 * Math.PI)) * 100) + '%';
+    if (PC.cd && !PC.ended && Date.now() - PC.t0 >= PC.cd * 60000) {
+      PC.ended = true;
+      if (PC.vib && navigator.vibrate) { try { navigator.vibrate([300, 100, 300, 100, 600]); } catch (e) {} }
+      pcText();
+    }
+    if (now - PC.txtAt > 250) { PC.txtAt = now; if (!PC.ended) pcText(); }
+    PC.raf = requestAnimationFrame(pcFrame);
+  }
+  function pcStart() {
+    if (PC.lv === 'build' && !PC.cd) PC.cd = 10;
+    if (PC.snd && !PC.ac) { try { PC.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (PC.ac && PC.ac.resume) { try { PC.ac.resume(); } catch (e) {} }
+    PC.run = true; PC.ended = false; PC.t0 = Date.now(); PC.last = performance.now(); PC.phase = 0; PC.txtAt = 0;
+    $('pacehud').style.display = 'block'; $('pacetxt').style.display = 'block';
+    $('pacemenu').style.display = 'none';
+    pcMenuLabels(); pcText();
+    cancelAnimationFrame(PC.raf);
+    PC.raf = requestAnimationFrame(pcFrame);
+  }
+  function pcStop() {
+    PC.run = false; PC.ended = false;
+    cancelAnimationFrame(PC.raf);
+    if (navigator.vibrate) { try { navigator.vibrate(0); } catch (e) {} }
+    $('pacehud').style.display = 'none'; $('pacetxt').style.display = 'none';
+    pcMenuLabels();
+  }
+  $('pacebtn').addEventListener('click', function () {
+    var m = $('pacemenu');
+    m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+    $('spdmenu').style.display = 'none';
+    pcMenuLabels();
+  });
+  $('pacemenu').addEventListener('click', function (e) {
+    var p = e.target.getAttribute && e.target.getAttribute('data-p');
+    var c = e.target.getAttribute && e.target.getAttribute('data-c');
+    var t = e.target.getAttribute && e.target.getAttribute('data-t');
+    if (p) { PC.lv = p; if (p === 'build' && !PC.cd) PC.cd = 10; pcStore(); if (PC.run) PC.t0 = Date.now(); }
+    if (c !== null && c !== undefined && e.target.hasAttribute && e.target.hasAttribute('data-c')) { PC.cd = +c; pcStore(); if (PC.run) { PC.t0 = Date.now(); PC.ended = false; } }
+    if (t) {
+      PC[t] = !PC[t]; pcStore();
+      if (t === 'snd' && PC.snd && !PC.ac) { try { PC.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (x) {} }
+    }
+    if (e.target.id === 'pacego') { if (PC.run) pcStop(); else pcStart(); }
+    pcMenuLabels();
+  });
+  $('pace').addEventListener('click', function (e) { e.stopPropagation(); });
+  $('pace').addEventListener('touchend', function (e) { e.stopPropagation(); });
+  pcMenuLabels();
 
   q.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); q.blur(); go(); }
