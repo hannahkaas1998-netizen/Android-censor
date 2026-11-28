@@ -2,6 +2,7 @@ package com.example.screencensor
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.app.Activity
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.widget.LinearLayout
@@ -71,6 +72,36 @@ object SettingsUi {
         Ui.slider(ctx, focus, "Heel detection", 1, 10, p.getInt("heelsens", 7), { "$it / 10" }) { p.edit().putInt("heelsens", it).apply() }
         Ui.toggle(ctx, focus, "Heels: count feet and other footwear", null, p, "heelmore", true)
         focus.addView(Ui.note(ctx, "Pictures with nothing to focus on are censored normally. For male genitals, untick \u201cMale genitals\u201d under What to censor, or they get covered."))
+
+        // ---- pace game (full screen mode)
+        val game = Ui.section(ctx, root, "Pace game (full screen)", false)
+        Ui.sub(ctx, game, "PACE")
+        Ui.chips(ctx, game, p, "pace_lv", "random", listOf(
+            "random" to "Random", "slow" to "Slow", "medium" to "Medium",
+            "fast" to "Fast", "super" to "Super fast", "build" to "Build up"
+        ), 3)
+        game.addView(Ui.note(ctx, "Random jumps between stop, slow, medium, fast and super fast and gets more intense towards the end. Build up rises steadily. The time is picked in full screen mode."))
+        Ui.sub(ctx, game, "FEEDBACK")
+        Ui.toggle(ctx, game, "Vibrate on every stroke", null, p, "pace_vib", true)
+        Ui.toggle(ctx, game, "Tick sound on every stroke", null, p, "pace_snd", false)
+        Ui.toggle(ctx, game, "Countdown beeps (last 10 seconds)", "Not used when the video is on", p, "pace_csnd", true)
+        Ui.toggle(ctx, game, "Spoken countdown", "Needs text-to-speech on the phone", p, "pace_voice", false)
+        Ui.sub(ctx, game, "VIDEO WHEN THE TIMER ENDS")
+        Ui.toggle(ctx, game, "Play the video when the timer ends", "Replaces the on-screen countdown", p, "pace_vid", true)
+        Ui.toggle(ctx, game, "Show the picture", "Off = sound only", p, "pace_vpic", true)
+        Ui.chips(ctx, game, p, "pace_lead", "0", listOf(
+            "0" to "At the end", "10" to "10 s before", "20" to "20 s before", "30" to "30 s before"
+        ), 2)
+        val vstat = Ui.note(ctx, CountdownVideo.status(ctx))
+        game.addView(vstat)
+        val act = ctx as? Activity
+        if (act != null) {
+            game.addView(Ui.button(ctx, "Choose video...", false) { CountdownVideo.pick(act) })
+            game.addView(Ui.button(ctx, "Use the default video", false) {
+                CountdownVideo.reset(ctx)
+                vstat.text = CountdownVideo.status(ctx)
+            })
+        }
 
         // ---- videos
         val vid = Ui.section(ctx, root, "Videos", false)

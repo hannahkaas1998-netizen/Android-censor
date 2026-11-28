@@ -104,23 +104,11 @@ class BrowserActivity : Activity() {
             { on -> runOnUiThread { applyFullScreen(on) } }
         )
         web.addJavascriptInterface(bridge, "Android")
-        // lets the page's "Choose video" button open the phone's file picker
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onShowFileChooser(w: WebView?, cb: ValueCallback<Array<Uri>>?, fp: WebChromeClient.FileChooserParams?): Boolean {
-                fileCb?.onReceiveValue(null)
-                fileCb = cb
-                return try {
-                    val i = Intent(Intent.ACTION_GET_CONTENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "video/*" }
-                    startActivityForResult(Intent.createChooser(i, "Choose the countdown video"), PICK_VIDEO)
-                    true
-                } catch (e: Exception) { fileCb = null; false }
-            }
-        }
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest): WebResourceResponse? {
                 // the countdown video: the one you picked if there is one, otherwise the one built into the app
                 if (r.url.host == "old.reddit.com" && r.url.path == "/__countdown.mp4") {
-                    val custom = java.io.File(filesDir, "countdown_custom.mp4")
+                    val custom = CountdownVideo.file(this@BrowserActivity)
                     val hdr = mapOf("Cache-Control" to "no-store", "X-Source" to (if (custom.exists()) "custom" else "default"))
                     return try {
                         val st = if (custom.exists()) custom.inputStream() else this@BrowserActivity.assets.open("countdown.mp4")
@@ -129,8 +117,24 @@ class BrowserActivity : Activity() {
                         WebResourceResponse("text/plain", "utf-8", 404, "Not Found", hdr, java.io.ByteArrayInputStream(ByteArray(0)))
                     }
                 }
+                // the pace-game settings chosen in the main menu, for the full screen page
+                if (r.url.host == "old.reddit.com" && r.url.path == "/__pace.json") {
+                    val j = org.json.JSONObject()
+                        .put("lv", p.getString("pace_lv", "random"))
+                        .put("snd", p.getBoolean("pace_snd", false))
+                        .put("vib", p.getBoolean("pace_vib", true))
+                        .put("csnd", p.getBoolean("pace_csnd", true))
+                        .put("voice", p.getBoolean("pace_voice", false))
+                        .put("vid", p.getBoolean("pace_vid", true))
+                        .put("vpic", p.getBoolean("pace_vpic", true))
+                        .put("lead", (p.getString("pace_lead", "0") ?: "0").toIntOrNull() ?: 0)
+                    return WebResourceResponse(
+                        "application/json", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"),
+                        java.io.ByteArrayInputStream(j.toString().toByteArray())
+                    )
+                }
                 if (r.url.host == "old.reddit.com" && r.url.path == "/__countdown_reset") {
-                    java.io.File(filesDir, "countdown_custom.mp4").delete()
+                    CountdownVideo.file(this@BrowserActivity).delete()
                     return WebResourceResponse(
                         "text/plain", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"),
                         java.io.ByteArrayInputStream("ok".toByteArray())
@@ -176,35 +180,14 @@ class BrowserActivity : Activity() {
         }
     }
 
-    private var fileCb: ValueCallback<Array<Uri>>? = null
-
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
         super.onActivityResult(req, res, data)
-        if (req != PICK_VIDEO) return
-        val cb = fileCb
-        fileCb = null
-        val uri = if (res == RESULT_OK) data?.data else null
-        if (uri == null) { cb?.onReceiveValue(null); return }
-        // keep our own copy so the video stays available (and survives clearing cookies)
-        Thread {
-            var ok = false
-            val dest = java.io.File(filesDir, "countdown_custom.mp4")
-            try {
-                contentResolver.openInputStream(uri)?.use { ins -> dest.outputStream().use { ins.copyTo(it) } }
-                ok = dest.length() > 0
-            } catch (e: Exception) { }
-            if (!ok) dest.delete()
-            runOnUiThread {
-                if (!ok) Toast.makeText(this, "Couldn't read that video", Toast.LENGTH_LONG).show()
-                cb?.onReceiveValue(if (ok) arrayOf(uri) else null)
-            }
-        }.start()
+        CountdownVideo.handle(this, req, res, data)
     }
 
     companion object {
         const val FEED = "https://old.reddit.com/__feed"
-        private const val PICK_VIDEO = 7711
     }
 
     /** Full screen for the random-pictures view: hides the address bar and the phone's bars. */

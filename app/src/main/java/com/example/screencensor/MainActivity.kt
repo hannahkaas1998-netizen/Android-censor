@@ -99,6 +99,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
         super.onActivityResult(req, res, data)
+        if (CountdownVideo.handle(this, req, res, data)) return
         if (req == 100 && res == RESULT_OK && data != null) {
             startForegroundService(
                 Intent(this, CensorService::class.java).putExtra("code", res).putExtra("data", data)
