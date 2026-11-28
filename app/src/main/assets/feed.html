@@ -43,10 +43,10 @@ select{flex:0 0 auto;max-width:42%}
 #pace{position:absolute;z-index:4;left:12px;bottom:calc(env(safe-area-inset-bottom) + 64px);display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 #pacebtn{font:inherit;font-size:14px;color:#fff;background:rgba(30,30,34,.85);border:0;border-radius:22px;padding:10px 16px}
 #pacebtn.live{background:#ff8fb1;color:#2a0614;font-weight:600}
-#pacemenu{display:none;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:rgba(20,20,24,.95);max-width:260px}
+#pacemenu{display:none;flex-direction:column;gap:8px;padding:10px;border-radius:14px;background:rgba(20,20,24,.95);max-width:200px}
 #pacemenu .lbl{font-size:12px;color:#a5a5b0;margin-bottom:-4px}
 #pacemenu .grp{display:flex;flex-wrap:wrap;gap:6px}
-#pacemenu button{font:inherit;font-size:14px;color:#f2f2f4;background:#232329;border:1px solid #33333b;border-radius:14px;padding:7px 12px}
+#pacemenu button{font:inherit;font-size:13px;color:#f2f2f4;background:#232329;border:1px solid #33333b;border-radius:12px;padding:6px 9px}
 #pacemenu button.on{background:#ff8fb1;color:#2a0614;border-color:#ff8fb1;font-weight:600}
 #pacemenu button.go{background:#7cb4ff;color:#06121f;border-color:#7cb4ff;font-weight:700;padding:10px}
 #pacemenu .hint{font-size:12px;color:#a5a5b0;line-height:1.35}
@@ -129,31 +129,12 @@ select{flex:0 0 auto;max-width:42%}
   </div>
   <div id="pace">
     <div id="pacemenu">
-      <div class="lbl">Pace</div>
-      <div class="grp" id="pacelv">
-        <button type="button" data-p="random">Random</button><button type="button" data-p="slow">Slow</button><button type="button" data-p="medium">Medium</button><button type="button" data-p="fast">Fast</button><button type="button" data-p="super">Super fast</button><button type="button" data-p="build">Build up</button>
-      </div>
-      <div class="lbl">Time (picked at random in the range, hidden)</div>
+      <div class="lbl">Time (random in range, hidden)</div>
       <div class="grp" id="pacecd">
-        <button type="button" data-c="none">None</button><button type="button" data-c="0-5">0-5 min</button><button type="button" data-c="5-10">5-10 min</button><button type="button" data-c="10-15">10-15 min</button><button type="button" data-c="15-20">15-20 min</button><button type="button" data-c="20-30">20-30 min</button>
+        <button type="button" data-c="none">None</button><button type="button" data-c="0-5">0-5</button><button type="button" data-c="5-10">5-10</button><button type="button" data-c="10-15">10-15</button><button type="button" data-c="15-20">15-20</button><button type="button" data-c="20-30">20-30</button>
       </div>
-      <div class="grp">
-        <button type="button" data-t="snd">Stroke tick</button><button type="button" data-t="vib">Vibrate</button><button type="button" data-t="csnd">Countdown beeps</button><button type="button" data-t="voice">Voice countdown</button>
-      </div>
-      <div class="lbl">Video at the end</div>
-      <div class="grp">
-        <button type="button" data-t="vid">Play video when the timer ends</button><button type="button" data-t="vpic">Show picture</button>
-      </div>
-      <div class="grp" id="pacelead">
-        <button type="button" data-v="0">At the end</button><button type="button" data-v="10">10 s before</button><button type="button" data-v="20">20 s before</button><button type="button" data-v="30">30 s before</button>
-      </div>
-      <div class="grp">
-        <button type="button" id="vidpick">Choose video...</button><button type="button" id="vidreset">Default video</button>
-      </div>
-      <input type="file" id="vidfile" accept="video/*" style="display:none">
-      <div class="hint" id="vidstat"></div>
       <button type="button" id="pacego" class="go">Start</button>
-      <div class="hint" id="pacehint"></div>
+      <div class="hint">build 10</div>
     </div>
     <button id="pacebtn" type="button">Pace</button>
   </div>
@@ -1122,19 +1103,22 @@ select{flex:0 0 auto;max-width:42%}
   var RW_EARLY = { stop: 15, slow: 35, medium: 30, fast: 15, super: 5 };
   var RW_LATE = { stop: 2, slow: 5, medium: 16, fast: 35, super: 42 };
   var RLEN = { stop: [3, 10], slow: [6, 25], medium: [6, 25], fast: [6, 22], super: [4, 12] };    // seconds a pace lasts
-  var PBUILD = 'pace build 9';
+  var PBUILD = 'pace build 10';
   var PC = { lv: 'random', rng: '5-10', snd: false, vib: true, csnd: true, voice: false, vid: true, vpic: true, lead: 0, vidOk: false, vidUrl: null, vidSrc: '', vidStarted: false, run: false, t0: 0, dur: 0, last: 0, phase: 0, bpm: 0, target: 0,
              seg: '', segEnd: 0, ended: false, raf: 0, txtAt: 0, ac: null, lastSec: -1 };
   try {
     var pv = JSON.parse(localStorage.getItem('shuf_pace2') || 'null');
-    if (pv) {
-      if (PNAMES[pv.lv]) PC.lv = pv.lv;
-      if (typeof pv.rng === 'string' && (pv.rng === 'none' || /^\d+-\d+$/.test(pv.rng))) PC.rng = pv.rng;
-      PC.snd = !!pv.snd; PC.vib = pv.vib !== false; PC.csnd = pv.csnd !== false; PC.voice = !!pv.voice;
-      PC.vid = pv.vid !== false; PC.vpic = pv.vpic !== false; PC.lead = +pv.lead || 0;
-    }
+    if (pv && typeof pv.rng === 'string' && (pv.rng === 'none' || /^\d+-\d+$/.test(pv.rng))) PC.rng = pv.rng;
   } catch (e) {}
-  function pcStore() { try { localStorage.setItem('shuf_pace2', JSON.stringify({ lv: PC.lv, rng: PC.rng, snd: PC.snd, vib: PC.vib, csnd: PC.csnd, voice: PC.voice, vid: PC.vid, vpic: PC.vpic, lead: PC.lead })); } catch (e) {} }
+  function pcStore() { try { localStorage.setItem('shuf_pace2', JSON.stringify({ rng: PC.rng })); } catch (e) {} }
+  // pace, sounds and video are chosen in the app's main menu (Pace game); the app serves them here
+  function pcCfg() {
+    return fetch('/__pace.json?' + Date.now()).then(function (r) { return r.json(); }).then(function (c) {
+      PC.lv = PNAMES[c.lv] ? c.lv : 'random';
+      PC.snd = !!c.snd; PC.vib = c.vib !== false; PC.csnd = c.csnd !== false; PC.voice = !!c.voice;
+      PC.vid = c.vid !== false; PC.vpic = c.vpic !== false; PC.lead = +c.lead || 0;
+    }).catch(function () {});
+  }
   function pcBuzz(p) { if (PC.vib && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} } }
   // the real length: random inside the chosen range, never shown to the user
   function pcPickDur() {
@@ -1144,23 +1128,11 @@ select{flex:0 0 auto;max-width:42%}
     return (lo + Math.random() * (hi - lo)) * 60000;
   }
   function pcMenuLabels() {
-    var i, b;
-    b = $('pacelv').querySelectorAll('button');
-    for (i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-p') === PC.lv ? 'on' : '';
-    b = $('pacecd').querySelectorAll('button');
-    for (i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-c') === PC.rng ? 'on' : '';
-    b = $('pacemenu').querySelectorAll('button[data-t]');
-    for (i = 0; i < b.length; i++) b[i].className = PC[b[i].getAttribute('data-t')] ? 'on' : '';
-    b = $('pacelead').querySelectorAll('button');
-    for (i = 0; i < b.length; i++) b[i].className = +b[i].getAttribute('data-v') === PC.lead ? 'on' : '';
+    var b = $('pacecd').querySelectorAll('button');
+    for (var i = 0; i < b.length; i++) b[i].className = b[i].getAttribute('data-c') === PC.rng ? 'on' : '';
     $('pacego').textContent = PC.run ? 'Stop' : 'Start';
     $('pacebtn').className = PC.run ? 'live' : '';
     $('pacebtn').textContent = PC.run ? 'Pace \u25CF' : 'Pace';
-    $('pacehint').textContent =
-      (PC.lv === 'random' ? 'Random: the pace jumps between stop, slow, medium, fast and super fast, and gets more intense towards the end. ' : '') +
-      (PC.lv === 'build' ? 'Build up: the pace rises steadily from slow to super fast. ' : '') +
-      (PC.vid ? 'The video replaces the on-screen countdown and plays when the timer ends (needs a time range). ' : '') +
-      (PC.rng === 'none' ? 'No time limit.' : 'The time is chosen at random in the range and is not shown. The last 10 seconds are counted down, then it says CUM NOW.') + ' [' + PBUILD + ']';
   }
   function pcBeat() {
     pcBuzz(18);
@@ -1230,7 +1202,6 @@ select{flex:0 0 auto;max-width:42%}
   // ----- the countdown video (the app serves it at /__countdown.mp4: your own one if you picked one, else the built-in one)
   function pcVidLoad() {
     PC.vidOk = false;
-    $('vidstat').textContent = 'Video: loading...';
     return fetch('/__countdown.mp4?' + Date.now()).then(function (r) {
       if (!r.ok) throw new Error('missing');
       PC.vidSrc = r.headers.get('X-Source') || 'default';
@@ -1241,10 +1212,8 @@ select{flex:0 0 auto;max-width:42%}
       var v = $('cdv');
       v.src = PC.vidUrl; v.load();
       PC.vidOk = true;
-      $('vidstat').textContent = 'Video: ' + (PC.vidSrc === 'custom' ? 'your own' : 'default') + ' (' + Math.max(1, Math.round(b.size / 1048576)) + ' MB)';
     }).catch(function () {
       PC.vidOk = false;
-      $('vidstat').textContent = 'Video: none found. Choose one, or put countdown.mp4 in the app assets.';
     });
   }
   function pcVidPlay() {
@@ -1270,9 +1239,6 @@ select{flex:0 0 auto;max-width:42%}
     if ($('cdtap').style.display === 'block') { $('cdtap').style.display = 'none'; v.play(); }
     else { pcVidClose(); pcStop(); }                    // tap while it plays = stop everything
   });
-  $('vidpick').addEventListener('click', function () { $('vidfile').click(); });
-  $('vidfile').addEventListener('change', function () { if (this.files && this.files.length) pcVidLoad(); this.value = ''; });
-  $('vidreset').addEventListener('click', function () { fetch('/__countdown_reset').then(pcVidLoad, pcVidLoad); });
   function pcSetText(txt, cls) {
     var t = $('pacetxt');
     if (t.textContent !== txt) t.textContent = txt;
@@ -1317,8 +1283,13 @@ select{flex:0 0 auto;max-width:42%}
     PC.raf = requestAnimationFrame(pcFrame);
   }
   function pcStart() {
-    if (PC.snd || PC.csnd || PC.voice) pcAudio();            // must happen inside the tap, or the browser keeps sound off
-    if (PC.voice && window.speechSynthesis) { try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} }
+    pcAudio();                                               // must happen inside the tap, or the browser keeps sound off
+    if (window.speechSynthesis) { try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} }
+    PC.run = true; PC.ending = false;
+    $('pacebtn').textContent = 'Pace \u25CF';
+    pcCfg().then(function () { if (PC.run && !PC.ending) pcBegin(); });
+  }
+  function pcBegin() {
     PC.vidStarted = false;
     if (PC.vid) pcVidLoad();
     PC.run = true; PC.ended = false; PC.t0 = Date.now(); PC.dur = pcPickDur();
@@ -1344,18 +1315,8 @@ select{flex:0 0 auto;max-width:42%}
     pcMenuLabels();
   });
   $('pacemenu').addEventListener('click', function (e) {
-    var g = function (n) { return e.target.getAttribute ? e.target.getAttribute(n) : null; };
-    var p = g('data-p'), c = g('data-c'), t = g('data-t');
-    if (p) { PC.lv = p; pcStore(); if (PC.run) pcStop(); }          // changing the pace starts a fresh game
-    if (c) { PC.rng = c; pcStore(); if (PC.run) pcStop(); }
-    var ld = g('data-v');
-    if (ld !== null) { PC.lead = +ld; pcStore(); }
-    if (t) {
-      PC[t] = !PC[t]; pcStore();
-      if ((t === 'snd' || t === 'csnd') && PC[t]) { pcAudio(); if (t === 'csnd') pcTone(700, 700, 0.12, 0.3); }   // short beep so you can check the volume
-      if (t === 'voice' && PC.voice) pcSpeak('Ten');
-      if (t === 'vid' && PC.vid && !PC.vidOk) pcVidLoad();
-    }
+    var c = e.target.getAttribute ? e.target.getAttribute('data-c') : null;
+    if (c) { PC.rng = c; pcStore(); if (PC.run) pcStop(); }          // a new time starts a fresh game
     if (e.target.id === 'pacego') { if (PC.run) pcStop(); else pcStart(); }
     pcMenuLabels();
   });
